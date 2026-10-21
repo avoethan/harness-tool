@@ -41,6 +41,12 @@ for (const setting of SETTINGS) {
     }
   });
 
+  test(`${setting}: the skill has a line for live-optional api criteria and one for declaring an expectation change`, () => {
+    const t = flat(renderSkill('task', context(setting, ['claude']), 'claude'));
+    assert.match(t, /every `api` criterion is marked "live optional" and you wrote the route tests[^.]*you may skip launch and drive/);
+    assert.match(t, /`harness phase tests --expect-change "<test file> <why the expectation changes>"`/);
+  });
+
   test(`${setting}: the skill says the gate writes the write-up and the agent only reads and reports it`, () => {
     const t = flat(renderSkill('task', context(setting, ['claude']), 'claude'));
     assert.match(t, /The gate writes the write-up itself at the end of every full run/);

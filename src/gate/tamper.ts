@@ -6,6 +6,10 @@
  *   - deletes or renames a test file,
  *   - adds `.only` / `.skip` / `.todo` / `xit` / `xfail` / `{ skip: true }` markers,
  *   - lowers the assertion count (`expect(`, `assert…(`, `should`) of a touched test file,
+ *   - changes a literal on an assertion line of a test file that existed at the base commit
+ *     ("expectation changed in a pre-existing test"), unless the brief's unit paths include the file,
+ *     a criterion's text quotes the new literal, or the agent declared it with
+ *     `harness phase tests --expect-change` (recorded in phase.json as `expectChanges`),
  *   - edits a protected file (CI, git hooks, lint/format/type-check/test-runner
  *     config, golden or snapshot files, harness files) or a gate-relevant
  *     package.json script or config key, unless the brief's allowed paths
@@ -52,6 +56,123 @@ export function countAssertions(text: string, rel = ''): number {
   let n = 0;
   for (const re of ASSERTION_RES) n += (t.match(new RegExp(re.source, 'g')) ?? []).length;
   return n;
+}
+
+// ---------------------------------------------------------------------------
+// Expectation changes in a pre-existing test
+// ---------------------------------------------------------------------------
+
+const ASSERT_LINE = /\bexpect\s*\(|\bassert|\.should\b|\bshould\s*\(|\btoBe\w*\s*\(|\btoEqual\w*\s*\(|\btoMatch\w*\s*\(|\bstrictEqual\b|\bdeepEqual\b/;
+
+/** The literals on a line: strings, regexes, numbers, booleans and single-line object text, whitespace-normalised. */
+export function lineLiterals(line: string): string[] {
+  const out: string[] = [];
+  let rest = line;
+  const take = (re: RegExp, f: (m: string[]) => string) => {
+    rest = rest.replace(re, (...a) => {
+      out.push(f(a as unknown as string[]));
+      return ' ';
+    });
+  };
+  take(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g, (m) => `s:${m[1] ?? m[2] ?? m[3] ?? ''}`);
+  take(/(?<=[(,=:!]\s*|^\s*)\/(?![/*])(?:[^/\\\n]|\\.)+\/[a-z]*/g, (m) => `r:${String(m[0]).trim()}`);
+  take(/\b(?:true|false|null|undefined)\b/g, (m) => `b:${m[0]}`);
+  take(/-?\b\d[\d_]*(?:\.\d+)?(?:e[+-]?\d+)?\b/gi, (m) => `n:${m[0]}`);
+  const open = line.indexOf('{');
+  const close = line.lastIndexOf('}');
+  if (open >= 0 && close > open) out.push(`o:${line.slice(open, close + 1).replace(/\s+/g, '')}`);
+  void rest;
+  return out.sort();
+}
+
+export interface ExpectationChange {
+  /** 1-based line in the new text of the first assertion line of the hunk. */
+  line: number;
+  /** Literals on the new assertion lines of the hunk that the old lines did not have. */
+  added: string[];
+}
+
+interface Hunk {
+  a0: number;
+  a1: number;
+  b0: number;
+  b1: number;
+}
+
+function lineDiff(a: string[], b: string[]): Hunk[] {
+  // trim the common ends, then LCS on the middle (test files are small; a huge middle falls back to one hunk)
+  let s = 0;
+  while (s < a.length && s < b.length && a[s] === b[s]) s++;
+  let ea = a.length;
+  let eb = b.length;
+  while (ea > s && eb > s && a[ea - 1] === b[eb - 1]) {
+    ea--;
+    eb--;
+  }
+  const n = ea - s;
+  const m = eb - s;
+  if (!n && !m) return [];
+  if (n * m > 4_000_000) return [{ a0: s, a1: ea, b0: s, b1: eb }];
+  const w = m + 1;
+  const t = new Uint32Array((n + 1) * w);
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) t[i * w + j] = a[s + i] === b[s + j] ? t[(i + 1) * w + j + 1] + 1 : Math.max(t[(i + 1) * w + j], t[i * w + j + 1]);
+  const out: Hunk[] = [];
+  let i = 0;
+  let j = 0;
+  let cur: Hunk | null = null;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[s + i] === b[s + j]) {
+      if (cur) out.push(cur);
+      cur = null;
+      i++;
+      j++;
+    } else {
+      cur ??= { a0: s + i, a1: s + i, b0: s + j, b1: s + j };
+      if (j >= m || (i < n && t[(i + 1) * w + j] >= t[i * w + j + 1])) {
+        i++;
+        cur.a1 = s + i;
+      } else {
+        j++;
+        cur.b1 = s + j;
+      }
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/**
+ * Hunks where an assertion line was replaced by an assertion line with different literals. A hunk that only
+ * adds assertions, only removes them (the assertion count catches that), or changes lines that hold no
+ * assertion call is not reported; neither is a change of spacing that keeps the literals.
+ */
+export function expectationChanges(before: string, now: string): ExpectationChange[] {
+  const a = before.split('\n');
+  const b = now.split('\n');
+  const out: ExpectationChange[] = [];
+  for (const h of lineDiff(a, b)) {
+    const ra = a.slice(h.a0, h.a1).filter((l) => ASSERT_LINE.test(l));
+    const idx: number[] = [];
+    for (let k = h.b0; k < h.b1; k++) if (ASSERT_LINE.test(b[k])) idx.push(k);
+    if (!ra.length || !idx.length) continue;
+    const pool = ra.flatMap(lineLiterals);
+    const added: string[] = [];
+    for (const l of idx.flatMap((k) => lineLiterals(b[k]))) {
+      const at = pool.indexOf(l);
+      if (at >= 0) pool.splice(at, 1);
+      else added.push(l);
+    }
+    if (added.length || pool.length) out.push({ line: idx[0] + 1, added });
+  }
+  return out;
+}
+
+/** Whether a changed literal (as `lineLiterals` writes it) is quoted by some criterion text. */
+function quotedByCriteria(lit: string, texts: string[]): boolean {
+  const v = lit.slice(2);
+  if (!v) return false;
+  const re = new RegExp(`(?<![A-Za-z0-9_])${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_])`);
+  return texts.some((t) => re.test(t));
 }
 
 const SKIP_MARKERS: Array<{ name: string; re: RegExp }> = [
@@ -206,6 +327,8 @@ export function tamperFindings(ctx: GateContext, opts: { now?: number } = {}): s
   const ok = (p: string) => isAllowed(p, allowed);
   let own: Set<string> | null = null;
   const harnessOwn = (p: string) => (own ??= harnessCommitted(ctx)).has(p);
+  const declared = new Set((ctx.phase?.expectChanges ?? []).map((e) => e.file));
+  const texts = ctx.criteria.flatMap((c) => [c.text, c.ears ?? '']).filter(Boolean);
   for (const d of ctx.diff) {
     const p = d.path;
     const old = d.oldPath ?? p;
@@ -229,6 +352,13 @@ export function tamperFindings(ctx: GateContext, opts: { now?: number } = {}): s
           const ab = countAssertions(before, old);
           const an = countAssertions(now, p);
           if (an < ab) out.push(`${p}: assertion count dropped from ${ab} to ${an}`);
+          // a changed expectation in a test that existed at the base commit
+          if ((d.status === 'M' || d.status === 'R') && !ok(p) && !ok(old) && !declared.has(p) && !declared.has(old)) {
+            for (const e of expectationChanges(before, now)) {
+              if (e.added.length && e.added.every((l) => quotedByCriteria(l, texts))) continue;
+              out.push(`expectation changed in a pre-existing test: ${p}:${e.line}`);
+            }
+          }
         }
       }
     }
@@ -286,6 +416,7 @@ function tamperInputs(ctx: GateContext): string[] {
     entriesDigest(ctx.baseEntries, pick),
     ctx.diff.map((d) => `${d.status}:${d.oldPath ?? ''}:${d.path}`).join('|'),
     JSON.stringify(allowedPaths(ctx)),
+    JSON.stringify([ctx.phase?.expectChanges ?? [], ctx.criteria.map((c) => [c.text, c.ears ?? ''])]),
     // which protected changes are the harness's own (a new apply changes the answer, not the tree)
     ctx.diff.some((d) => !!protectedKind(d.path) || (!!d.oldPath && !!protectedKind(d.oldPath))) ? JSON.stringify([...harnessCommitted(ctx)].sort()) : '',
     JSON.stringify(ctx.phase ? { p: ctx.phase.phase, s: ctx.phase.since, n: ctx.phase.testsEntries } : null),

@@ -34,6 +34,7 @@ import { sha256 } from '../lib/hash';
 import type { HarnessState, RunRecord } from './collect';
 import { rowFor } from './worklog';
 import type { BriefFile } from '../intake/brief';
+import { buildDigest, denialsByRail, ticketRow } from './digest';
 
 export const TIERS: Tier[] = ['declared', 'counted-strong', 'counted-majority', 'review-derived', 'single-source'];
 export const FAMILIES: StandardFamily[] = ['lint', 'format', 'types', 'naming', 'layout', 'sql', 'tests', 'errors', 'logging', 'api', 'async', 'imports', 'validation', 'commits', 'ci', 'safety', 'other'];
@@ -338,6 +339,10 @@ export function buildReport(st: HarnessState, opts: BuildOptions): Report {
   const idx = indexTasks(st, since);
   const tasks = idx.tasks.map((a) => taskRow(a, st, idx.sessionTask, idx.prompts, idx.events));
 
+  // Per-ticket headline numbers (the digest's) and the denials by rail.
+  const perTicket = idx.tasks.map((a) => ticketRow(buildDigest(a, idx.events), safeHash(a.brief?.ticketHash, a.id)));
+  const rails = denialsByRail(idx.events);
+
   // Learning loop.
   const lessons = st.lessons.filter((l) => !since || (l.lastSeen ?? l.firstSeen ?? '') >= since);
   const learning = {
@@ -381,6 +386,8 @@ export function buildReport(st: HarnessState, opts: BuildOptions): Report {
     tasks,
     learning,
     caps,
+    perTicket,
+    rails,
   };
   if (opts.selfcheck && Object.keys(opts.selfcheck).length) report.selfcheck = opts.selfcheck;
   if (st.worklog) report.worklogRows = st.worklog.rows.length;

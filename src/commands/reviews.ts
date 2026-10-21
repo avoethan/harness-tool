@@ -83,6 +83,43 @@ export function httpGetOnce(url: string, headers: Record<string, string>, timeou
   return httpGet(url, headers, timeoutMs);
 }
 
+export type HttpPost = (url: string, headers: Record<string, string>, body: string, timeoutMs: number) => Promise<HttpResponse>;
+
+/** One JSON POST (used only by the Jira writes, which the user runs; never by the test suite against the network). */
+export const defaultHttpPost: HttpPost = (url, headers, body, timeoutMs) =>
+  new Promise((resolve, reject) => {
+    const h = { ...headers, 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(body)) };
+    const req = https.request(url, { method: 'POST', headers: h, timeout: timeoutMs }, (res) => {
+      let text = '';
+      res.setEncoding('utf8');
+      res.on('data', (c: string) => {
+        if (text.length < MAX_BODY) text += c;
+      });
+      res.on('end', () => {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(res.headers)) if (typeof v === 'string') out[k.toLowerCase()] = v;
+        resolve({ status: res.statusCode ?? 0, headers: out, body: text });
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('timed out')));
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+
+let httpPost: HttpPost = defaultHttpPost;
+/** Tests replace the HTTP POST layer; returns the previous one. */
+export function setHttpPost(fn: HttpPost): HttpPost {
+  const prev = httpPost;
+  httpPost = fn;
+  return prev;
+}
+
+/** One POST through the current HTTP layer. */
+export function httpPostOnce(url: string, headers: Record<string, string>, body: string, timeoutMs: number): Promise<HttpResponse> {
+  return httpPost(url, headers, body, timeoutMs);
+}
+
 // ---------------------------------------------------------------------------
 // token (never stored, printed or logged)
 // ---------------------------------------------------------------------------

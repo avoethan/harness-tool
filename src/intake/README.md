@@ -27,7 +27,7 @@ stop before code; every other question proceeds on its recommended option.
 ```
 ~/.harness/briefs/<id>.json                 the brief (team id: t-<10 hex of the ticket's sha256>; personal: the task id)
 ~/.harness/runs/<repoId>/current-task       the task id the gate, phase and write-up use when --task is absent
-~/.harness/runs/<repoId>/<taskId>/phase.json   {phase, since, testsEntries, history[]}
+~/.harness/runs/<repoId>/<taskId>/phase.json   {phase, since, testsEntries, history[], expectChanges?[{file, reason, at}]}
 ~/.harness/runs/<repoId>/<taskId>/writeup.md   the last write-up (written by every full `harness gate` run, and by `harness writeup`)
 <repo>/tasks/*.md                           personal ledger (front matter + body), committed with the repo
 <git common dir>/harness-locks/ledger.lock  short-lived lock while a ledger write happens
@@ -47,13 +47,14 @@ counts only.
 |---|---|
 | `harness intake --from <file\|-> [--repo <path>] [--unattended] [--json]` | 0 ok; 1 plan lint failed (brief saved, problems listed); 2 usage, unreadable, empty or over 1 MB |
 | `harness intake --jira <KEY> [--repo <path>] [--unattended] [--json]` | as `--from`; also 1 Jira refused (401, 403, 404, a redirect, unreachable); 2 `--from` given too, a key not like `SHOP-102`, Jira not set up, or no token in the environment |
+| `harness intake --jira-next [--repo <path>] [--unattended] [--json]` | as `--jira`; also 1 "no ticket in the filter" (empty search) or Jira refused the search; 2 `--jira` or `--from` given too, or `jira.filter` / Jira / the token not set up |
 | `harness intake show [id] [--repo <path>] [--json]` | 0; 1 no brief or lint failed |
 | `harness brief [id] [--repo <path>] [--json]` | the same as `harness intake show` (an alias: same flags, same output, same exit codes) |
 | `harness intake answer <id> --q <n> --answer "<letter or text>" [--json]` | 0; 1 unknown brief, `Qn` not open, or lint failed; 2 usage |
 | `harness intake answer <id> --all-recommended [--json]` | 0; takes the recommended option for every blocking question (recorded as an unattended assumption); 1 unknown brief or lint failed; 2 usage |
 | `harness intake lint [id]` | 0 every criterion has a red-first, green-at-base or gate-proved check, or an open question; 1 otherwise, with the list |
 | `harness intake list [--json]` | 0 |
-| `harness phase implement\|tests\|status [--task <id>] [--repo <path>] [--session <id>] [--json]` | 0; 1 no current task; 2 usage |
+| `harness phase implement\|tests\|status [--task <id>] [--repo <path>] [--session <id>] [--expect-change "<file> <reason>"]... [--json]` | 0; 1 no current task; 2 usage, or an `--expect-change` that is not a test file that exists at the base commit |
 | `harness task add --title <t> [--priority <n>] [--acceptance <a>]... [--paths a,b] [--depends-on <id>]` | 0; 1 refused (unknown dependency, secret-looking text) |
 | `harness task list [--status <s>] [--json]` | 0 |
 | `harness task next [--stale-minutes <n>] [--json]` | 0 a task is ready; 1 none is ready (the reasons are listed) |
@@ -84,6 +85,20 @@ repository cannot point the token at another host), set by the user in a termina
 never stored, printed or logged. When the email variable is set the request uses HTTP Basic
 `email:token` (Jira Cloud); otherwise `Authorization: Bearer <token>` (Data Center personal
 access tokens). `--jira` and `--from` together exit 2.
+
+The brief stores the ticket key as `jiraKey` (kept across answers and re-reads), so
+`harness jira comment` knows which ticket to write to (see `src/jira/README.md`).
+
+### The queue: `--jira-next`
+
+`harness intake --jira-next` takes the first ticket of a search you saved as `jira.filter`
+(a JQL string, or a saved filter id, which is sent as `filter=<id>`), then does exactly what
+`--jira <KEY>` does. Read-only: one `GET <baseUrl>/rest/api/2/search?jql=<jql>&maxResults=1&fields=key`
+first (same host pinning, no redirect followed, an error never shows the body), then the
+issue request. An empty search exits 1 with "no ticket in the filter". It cannot be combined
+with `--jira` or `--from`. Set it once in a terminal:
+`harness config set jira.filter "project = SHOP AND status = \"Ready for dev\" ORDER BY priority DESC"`
+(non-empty, one line).
 
 All `task` subcommands and `phase` take `--repo <path>` (default: the git
 root of the working directory). In the team setting, the `task` subcommands
@@ -133,7 +148,7 @@ Acceptance criteria (5):
         check: manual - Manual: capture ac3-the-order-page-shows-the-total.png showing "The order page shows the total" in orders-api; the write-up links it (prove it red first)
         repo:  orders-api (default)
   AC4  [api 0.95] Only admins can see the cost price via GET /orders/:id/cost
-        check: e2e-http - GET /orders/:id/cost -> 200 in orders-api (until answered: 403 Forbidden) (prove it red first)
+        check: e2e-http - GET /orders/:id/cost -> 200 in orders-api; live drive, or a unit test named "AC4:" that names the route "GET /orders/:id/cost" (until answered: 403 Forbidden) (prove it red first)
         run:   harness verify drive --method GET --path /orders/:id/cost --expect-status 200
         repo:  orders-api (resource)
   AC5  [untestable 0.70] The page must load fast
@@ -227,7 +242,7 @@ Gate: not run (no evidence file for this task). Run `harness gate` before openin
 | AC1 GET /orders/:id returns total | e2e-http: GET /orders/:id -> 200; body has "total" in orders-api | gate not run | - |
 | AC2 total stored in orders.total column | e2e-db: Table orders has column total after the change (test database only) in orders-api | gate not run | - |
 | AC3 The order page shows the total | manual: Manual: capture ac3-the-order-page-shows-the-total.png showing "The order page shows the… | gate not run | - |
-| AC4 Only admins can see the cost price via GET /orders/:id/cost | e2e-http: GET /orders/:id/cost -> 200 in orders-api (until answered: 403 Forbidden) | gate not run | - |
+| AC4 Only admins can see the cost price via GET /orders/:id/cost | e2e-http: GET /orders/:id/cost -> 200 in orders-api; live drive, or a unit test named "AC4:" that names the route "GET /orders/:id/cost" (until answered: 403 Forbidden) | gate not run | - |
 | AC5 The page must load fast | manual: Measure before and after: p95 < 500 ms in orders-api; record both numbers as an artifact | gate not run | - |
 
 Tests were added or changed in the tests phase (entered 1 time(s)); the gate has not checked them yet.
@@ -397,6 +412,28 @@ AC6 waits for an answer in an interactive run and here took its recommended
 option.
 
 ## Green-at-base and unattended intake
+
+**Live optional (status-only `api` criteria).** An `api` criterion whose
+expectation is only a status on a named route (no body, JSON, header, timing
+or database expectation, and not the database-down case) is classified with
+`liveOptional: true` and `liveOptionalRoute: "<METHOD> <path>"`. Its
+description says "live drive, or a unit test named `<id>:` that names the
+route `<METHOD> <path>`"; the `run:` line is unchanged. The gate's `e2e:<id>`
+step passes on a fresh passing artefact or on a passing test named `<id>:`
+in a test file that contains the route path, so the agent may skip
+`harness verify launch` and `drive` when every `api` criterion is live
+optional and it wrote the route tests. `harness gate prove-red` treats such a
+check like a unit check once a changed test names it. Anything richer stays
+live-only. See `src/gate/README.md`.
+
+**Expectation changes in existing tests.** `harness phase tests
+--expect-change "<file> <reason>"` (repeatable) records `{file, reason, at}`
+under `expectChanges` in `phase.json`. The file must be a test file that
+exists at the base commit (else exit 2, nothing recorded). The gate's tamper
+step accepts a changed assertion literal in a declared file, and the
+write-up prints "Expectations changed in existing tests (declared): <file>:
+<reason>". Use it when the ticket really changes behaviour that an existing
+test pinned.
 
 **Green-at-base.** Some criteria must *keep* passing rather than start
 failing: characterisation tests, "no behaviour change", "the existing tests

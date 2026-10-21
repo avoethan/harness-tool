@@ -30,6 +30,7 @@ import { DEFAULT_IGNORE_DIRS, walkFiles } from '../lib/fsx';
 import { renderMarkdown } from './markdown';
 import { CHECK_ID_RE, CHECK_TYPES, CLASSES, FAMILIES, MODES, OUTCOMES, TIERS } from './build';
 import { CODEX_STEPS, DEVIN_STEPS } from './selfcheck';
+import { LANDING_WORDS, RAILS } from './digest';
 
 export interface TokenSources {
   workspaceRoot?: string;
@@ -129,6 +130,21 @@ export function vocabularySample(): Report {
     caps: { tasksAtGateCap: 1, stopReleasesAtCap: 1 },
     selfcheck: { devin: { steps: 1, recorded: 1, confirmed: steps, different: steps }, codex: { steps: 1, recorded: 1, confirmed: steps, different: steps }, claude: { steps: 1, recorded: 1, confirmed: [], different: [] } },
     worklogRows: 1,
+    perTicket: [...LANDING_WORDS].map((w, i) => ({
+      ticketHash: '0'.repeat(64),
+      criteria: 1,
+      gateAttempts: 1,
+      gateVerdict: (['PASS', 'FAIL', 'BLOCKED', 'none'] as const)[i % 4],
+      denials: 1,
+      testsEntries: 1,
+      expectChanges: 1,
+      sessions: 1,
+      costUsd: 1,
+      landing: w,
+      pullRequest: true,
+      minutes: 1,
+    })),
+    rails: all(RAILS),
   };
 }
 
@@ -293,7 +309,7 @@ function hits(text: string, tokens: Set<string>): boolean {
 }
 
 /** Maps whose keys come from data (masked as `{key}` in a leak path). */
-const DYNAMIC_MAPS = new Set(['byTier', 'byFamily', 'byMode', 'byType', 'findingsByCheck', 'classifications', 'selfcheck']);
+const DYNAMIC_MAPS = new Set(['byTier', 'byFamily', 'byMode', 'byType', 'findingsByCheck', 'classifications', 'selfcheck', 'rails']);
 
 export function scrubValue(value: unknown, tokens: Set<string>, at = '', out: string[] = []): string[] {
   if (Array.isArray(value)) {

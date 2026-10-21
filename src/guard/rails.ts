@@ -61,7 +61,7 @@ export const HARNESS_PROGS = new Set(['harness', 'harness.cmd']);
 export const HARNESS_CLI_PATH_RE = /(^|[\\/])(dist[\\/]src[\\/]cli\.js|bin[\\/]harness(\.cmd)?)$/i;
 
 /** Subcommands that are always the user's. */
-export const HARNESS_ADMIN_SUBS = new Set(['install', 'apply', 'undo', 'uninstall', 'self-update', 'pr']);
+export const HARNESS_ADMIN_SUBS = new Set(['install', 'apply', 'undo', 'uninstall', 'self-update', 'pr', 'jira']);
 /** Subcommands whose listed second word is the user's (the rest of that subcommand stays allowed). */
 export const HARNESS_ADMIN_SECOND: Record<string, Set<string>> = {
   config: new Set(['set', 'unset', 'reset']),

@@ -34,6 +34,7 @@ harness/
   src/guard/                      safety-rail library (pure functions over a parsed command)
   src/discover/  src/assess/  src/lifecycle/  src/render/  src/gate/
   src/verify/    src/intake/  src/land/       src/learn/   src/report/  src/runctl/
+  src/pr/        src/jira/    (the user-run writes to GitHub and Jira; the guard's admin rail denies `harness pr` and `harness jira` to every agent)
   templates/                      skills (SKILL.md), always-on files, per-agent config fragments
   probes/                         ast-grep probe library (YAML rules with valid/invalid tests)
   selfcheck/                      the self-check pages the user follows on the work machine (Devin desktop, Codex)
@@ -130,6 +131,7 @@ committed harness files (`AGENTS.md`, `CLAUDE.md`, `.claude/`, `.codex/`,
   runs/<repoId>/hook-<name>/  evidence of `harness gate --hook pre-commit|pre-push|ci`
   runs/<repoId>/current-task  the task id the gate uses when --task is absent (set by intake and `task claim`)
   runs/<repoId>/land.lock     the landing lock ({pid, host, at, task}; stale after an hour or when its process is gone; src/land/lock.ts)
+  runs/<repoId>/<taskId>/digest.md  the per-ticket digest (`harness digest`; names and counts only, src/report/digest.ts)
   runs/<repoId>/<taskId>/landing.json  the landing record (landed, post_landing_red, auto_fixed, reverted, revert_correct, transitions; src/land/record.ts)
   runs/<repoId>/<taskId>/ci-<n>-<kind>.json  local CI evidence of one landing (initial, rerun, after-fix)
   runs/<repoId>/<taskId>/run.json  runner state of a task (worktree, branch, agent, status; src/runctl/run.ts)

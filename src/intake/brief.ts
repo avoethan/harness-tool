@@ -103,6 +103,8 @@ export interface BriefFile extends Brief {
   /** Plan-lint problems; empty when the brief is complete. */
   lint: string[];
   updatedAt: string;
+  /** The Jira issue key when the ticket was read with `--jira` / `--jira-next` (used by `harness jira comment`). */
+  jiraKey?: string;
 }
 
 export interface IntakeContext {
@@ -115,6 +117,8 @@ export interface IntakeContext {
    * a blocking question takes its recommended option, recorded as an assumption, and does not hold its criterion open.
    */
   unattended?: boolean;
+  /** The Jira issue key the ticket came from. */
+  jiraKey?: string;
   /** Force an id (ledger tasks use their own id). */
   id?: string;
   source?: 'ticket' | 'ledger';
@@ -201,6 +205,7 @@ interface Seed {
   clarifications: Clarification[];
   dropped: Criterion[];
   baseShas: Record<string, string>;
+  jiraKey?: string;
 }
 
 /** Parse a pasted ticket and build the brief. */
@@ -225,6 +230,7 @@ export function buildBrief(text: string, ctx: IntakeContext): BriefFile {
     clarifications: previous && previous.ticketHash === parsed.hash ? previous.clarifications : [],
     dropped: previous && previous.ticketHash === parsed.hash ? previous.dropped : [],
     baseShas: previous && previous.ticketHash === parsed.hash ? previous.baseShas : {},
+    ...((ctx.jiraKey ?? (previous && previous.ticketHash === parsed.hash ? previous.jiraKey : undefined)) ? { jiraKey: (ctx.jiraKey ?? previous?.jiraKey) as string } : {}),
   };
   return assemble(seed, ctx, now);
 }
@@ -250,6 +256,7 @@ function seedOf(b: BriefFile): Seed {
     clarifications: b.clarifications,
     dropped: b.dropped,
     baseShas: b.baseShas,
+    ...(b.jiraKey ? { jiraKey: b.jiraKey } : {}),
   };
 }
 
@@ -430,6 +437,7 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
     unitEstimates: plan.estimates,
     baseShas,
     lint,
+    ...(seed.jiraKey ? { jiraKey: seed.jiraKey } : {}),
   };
 }
 

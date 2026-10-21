@@ -103,6 +103,8 @@ test('Markdown: plain language, one table per section, no ticket text', () => {
     '## Assessment line classes',
     '## Team proposals',
     '## Tasks',
+    '## Per ticket',
+    '## Rails',
     '## Learning loop',
     '## Caps',
     '## Self-checks',

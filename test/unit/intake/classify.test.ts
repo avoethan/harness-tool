@@ -154,6 +154,29 @@ test('api checks: verify drive with method, status and body; defaults are logged
   assert.ok(nf.unclear.some((u) => u.topic === 'method' && !!u.assume));
 });
 
+test('api checks: a status-only expectation is liveOptional; body, header, database, timing and db-down expectations stay live-only', () => {
+  const only = checkFor('AC1', 'GET /health returns 200', 'api', extractFacts('GET /health returns 200'), undefined);
+  assert.equal(only.check!.kind, 'e2e-http');
+  assert.equal(only.check!.liveOptional, true);
+  assert.equal(only.check!.liveOptionalRoute, 'GET /health');
+  assert.equal(only.check!.redFirst, true);
+  assert.match(only.check!.description, /live drive, or a unit test named "AC1:" that names the route "GET \/health"/);
+  assert.equal(only.check!.command, 'harness verify drive --method GET --path /health --expect-status 200 --criterion AC1', 'the run line is unchanged');
+  for (const t of [
+    'GET /orders/:id returns total',
+    'GET /report responds with header Content-Type text/csv',
+    'POST /orders stores the row in the orders table',
+    'GET /orders answers 200 with p95 under 300 ms',
+    'GET /orders returns 503 while the database is unreachable',
+  ]) {
+    const r = checkFor('AC1', t, 'api', extractFacts(t), undefined);
+    assert.equal(r.check!.kind, 'e2e-http', t);
+    assert.equal(r.check!.liveOptional, undefined, t);
+  }
+  const noRoute = checkFor('AC4', 'an unknown order id returns not found from the API', 'api', extractFacts('an unknown order id returns not found from the API'), undefined);
+  assert.equal(noRoute.check!.liveOptional, undefined, 'no route named: nothing for a unit test to name');
+});
+
 test('db, ui, nonfunctional checks', () => {
   const db = checkFor('AC2', 'total stored in orders.total column', 'db', extractFacts('total stored in orders.total column'), undefined);
   assert.equal(db.check!.kind, 'e2e-db');

@@ -87,6 +87,18 @@ export function setConfigValue(c: HarnessConfig, key: string, value: unknown): s
     case 'jira.acceptanceField':
       if (typeof value !== 'string' || !/^customfield_\d{3,9}$/.test(value)) return 'jira.acceptanceField must be a field id such as customfield_10042';
       break;
+    case 'jira.filter':
+      if (typeof value === 'number' && Number.isInteger(value) && value > 0) value = String(value);
+      if (typeof value !== 'string' || !value.trim() || /[\r\n]/.test(value)) return 'jira.filter must be a JQL string or a saved filter id, on one line and not empty';
+      value = value.trim();
+      break;
+    case 'jira.project':
+      if (typeof value !== 'string' || !/^[A-Z][A-Z0-9_]{1,19}$/.test(value)) return 'jira.project must be a project key such as SHOP (upper case letters and digits)';
+      break;
+    case 'jira.followupType':
+      if (typeof value !== 'string' || !value.trim() || value.length > 60 || /[\r\n]/.test(value)) return 'jira.followupType must be an issue type name such as Task';
+      value = value.trim();
+      break;
     case 'jira.emailEnv':
     case 'jira.tokenEnv':
       // The *name* of the variable, never the email or the token.

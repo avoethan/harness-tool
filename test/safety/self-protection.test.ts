@@ -269,11 +269,17 @@ function adminDeny(): string[] {
     'harness pr open --dry-run',
     'harness pr open --task T-003 --draft --base main',
     `node "${cliPath}" pr open --dry-run`,
+    'harness jira comment',
+    'harness jira comment --dry-run',
+    'harness jira create --yes',
+    'harness jira create --dry-run',
+    'harness jira create --from blocked --project SHOP --yes',
+    `node "${cliPath}" jira comment --key SHOP-1`,
     'harness gate --from-install',
     'bash -c "harness apply"',
   ];
 }
-const ADMIN_ALLOW = ['harness gate', 'harness status', 'harness config get', 'harness db list', 'harness selfcheck list', 'harness selfcheck probe-log', 'harness verify doctor'];
+const ADMIN_ALLOW = ['harness intake --jira SHOP-102', 'harness intake --jira-next', 'harness gate', 'harness status', 'harness config get', 'harness db list', 'harness selfcheck list', 'harness selfcheck probe-log', 'harness verify doctor'];
 
 test('self-protection: nested claude/codex/devin with bypass flags and the harness admin commands are denied from Claude, Codex and Devin payloads; plain nested runs and the agent harness commands stay allowed', (t) => {
   const nb = built();

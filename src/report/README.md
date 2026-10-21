@@ -6,6 +6,7 @@
 harness report [--since <date>] [--json|--md] [--out <file>] [--worklog <file>] [--workspace <dir>]
 harness report --check-scrub [--since <date>] [--workspace <dir>]
 harness report row --task <id|ticket hash> [--header] [--append] [--worklog <file>]
+harness digest [--task <id>] [--repo <path>] [--json]
 harness status [--json]
 harness selfcheck [list] [--agent devin|codex] [--json]
 harness selfcheck record --agent <agent> --step <n> --result "<text>" [--outcome expected|different|noted]
@@ -67,6 +68,36 @@ ties going to the later one. Runs named `adhoc` or `hook-*` are not tasks.
 step ids, assess check ids shaped like `R10`); anything else is counted as
 `other`. Ticket hashes that are not 64 hex characters are hashed again. No
 title, task id, path, statement or message text is ever copied.
+
+## The per-ticket digest (`digest.ts`, `harness digest`)
+
+One page per ticket, built from the task's brief, its run folder(s) under
+`runs/<repoId>/<taskId>/` and the instrumentation log, and saved as
+`digest.md` beside the write-up (exit 0 ok, 1 unknown task, 2 usage). It is
+names and counts only: the brief's title is the one piece of ticket text, and
+criteria, descriptions, questions, check descriptions and the reasons given
+for an expectation change are never copied. The BLOCKED reason is the gate's
+own reason line, cut to 160 characters. The whole page, and the `--json`
+form, go through the secret redaction (`src/lib/redact.ts`) before they are
+printed or saved.
+
+| Section | Source |
+|---|---|
+| Criteria and checks | the brief: criteria per kind, checks per kind, red-first and green-at-base counts |
+| Prove-red | each check's `redProof` (red, green, no test found, could not run) and the checks not run yet |
+| Gate | `gate.verdict` and `gate.partial` events (attempts, verdict order), `evidence.json` per repository (final verdict, steps by status, failing step names, BLOCKED reason, attempt cap) |
+| Interventions | `guard.deny` events of the task's sessions, by rail (a rail outside the fixed list counts as `other`) |
+| Tests phase | `phase.json`: entries, current phase and, when present, the `expectChanges` list (`{file, reason, at}`: file and time only); the field is optional |
+| Live artefacts | `e2e/*.json`: fresh when the artefact's tree hash is the latest evidence's, stale otherwise, and the ones recording a failure |
+| Sessions and cost | `run.json` (agent, status; optional `sessions`, `turns`, `costUsd`) and the runner's `run.session` / `run.task` events; cost only when the runner recorded it |
+| Landing and pull request | `landing.json`, the `ci-*.json` count, `pr.json` |
+| Time | first to last event of the task and of the sessions tied to it |
+
+`harness report` carries the same numbers as a "Per ticket" table (one row
+per task folder: criteria, gate attempts, verdict, rail denials, tests-phase
+entries, expectation changes, sessions, cost, landing outcome, pull request
+yes/no, minutes) and a "Rails" table with the denials per rail. Both are in
+the report's fixed vocabulary, so the scrubber checks them like the rest.
 
 ## The scrubber (`scrub.ts`)
 

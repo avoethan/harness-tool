@@ -37,6 +37,10 @@ const DENY = [
   'harness pr open',
   'harness pr open --dry-run',
   'harness pr',
+  'harness jira comment',
+  'harness jira create --yes',
+  'harness jira create --dry-run',
+  'bash -c "harness jira comment --dry-run"',
   'node /opt/tools/harness/dist/src/cli.js pr open --task T-003',
   'bash -c "harness pr open --dry-run"',
   'harness gate --from-install',
@@ -62,6 +66,8 @@ const DENY = [
 ];
 
 const ALLOW = [
+  'harness intake --jira SHOP-102',
+  'harness intake --jira-next',
   'harness gate',
   'harness verify launch',
   'harness discover',

@@ -3,6 +3,19 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.4.0 (2026-10-21)
+
+The user's second round of requests: a Jira queue and two user-run Jira writes, a cost cut for status-only API criteria, a tamper rule for changed expectations in existing tests, and a per-ticket digest.
+
+- New `harness digest [--task <id>] [--repo <path>] [--json]`: one page per ticket from the task's run folder and the instrumentation log. Sections: criteria and checks, prove-red, gate (attempts, verdicts, final verdict, BLOCKED reason), interventions (tool calls the hooks denied, by rail), tests phase (entries and declared expectation changes from the optional `phase.json` `expectChanges`), live artefacts (fresh or stale against the latest evidence), sessions and cost (from `run.json` and the runner's events, when recorded), landing and pull request, and time. Names and counts only: the title is the only ticket text, and the page goes through secret redaction. Printed and saved as `digest.md` beside the write-up.
+- `harness report` gains a "Per ticket" table (one row per task folder with the digest's headline numbers) and a "Rails" table (denials per rail). The existing report fields are unchanged; the scrubber runs over the new fields too.
+- Cost cut: an `api` criterion that expects only a status on a named route is classified `liveOptional` (description: "live drive, or a unit test named `<id>:` that names the route `<METHOD> <path>`"). The gate's `e2e:<id>` step passes on a fresh passing artefact or on a passing test named `<id>:` in a test file that contains the route path; body, JSON, header, timing, database and database-down checks stay live-only. `prove-red` treats a `liveOptional` check like a unit check once a test names it. The task skill says the agent may skip launch and drive when every `api` criterion is live optional and it wrote the route tests.
+- Tamper: changing a literal on an assertion line of a test file that existed at the base commit now fails ("expectation changed in a pre-existing test: <file>:<line>") unless the brief's unit paths include the file, a criterion's text quotes the new literal, or the change is declared with the new `harness phase tests --expect-change "<file> <reason>"` (recorded as `expectChanges` in `phase.json`; the write-up prints "Expectations changed in existing tests (declared)").
+- `harness intake --jira-next` (read-only): config `jira.filter` is a JQL string or a saved filter id; the harness asks Jira for the first issue of that search (`GET /rest/api/2/search?jql=...&maxResults=1&fields=key`) and runs `--jira <KEY>` on it. An empty result exits 1 with "no ticket in the filter". The brief now stores `jiraKey` when the ticket came from Jira.
+- New `harness jira comment [--task <id>] [--repo <path>] [--key <KEY>] [--pr <url>] [--dry-run] [--json]` (run by you): posts the write-up's Verification table (as a Jira wiki table), the gate verdict line and the pull request link (`--pr`, else `pr.json`) to the ticket with `POST /rest/api/2/issue/<KEY>/comment`.
+- New `harness jira create [--task <id>] [--repo <path>] [--key <KEY>] [--from blocked|feedback|"<text>"] [--one] [--project <KEY>] [--type <name>] [--pr <url>] [--yes] [--dry-run] [--json]` (run by you): drafts follow-up tickets (the gate's BLOCKED reason, the write-up's "Feedback wanted" items, or your text), always prints the draft, and sends only with `--yes` (`POST /rest/api/2/issue`, then a "Relates" link to the source ticket; a failed link is reported, not fatal). New config keys `jira.filter`, `jira.project`, `jira.followupType`.
+- `jira` is an admin subcommand in the guard: denied to every agent, with a deny prefix in the rendered rules of all three agents. `intake --jira` and `--jira-next` stay allowed.
+
 ## 0.3.0 (2026-10-21)
 
 Integrations the user asked for after the first public release.

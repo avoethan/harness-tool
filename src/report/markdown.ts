@@ -17,6 +17,8 @@ const SECTION_TEXT = {
   tasks: 'One row per task, keyed by the first 12 characters of the ticket hash (never the title).',
   learning: 'Mistakes the learning loop captured and what became of them.',
   caps: 'Times a cap stopped work.',
+  perTicket: 'One row per task folder with the headline numbers of its digest (`harness digest` prints the whole page); the ticket is the first 12 characters of the ticket hash.',
+  rails: 'Tool calls the guard denied, by the rail that denied them.',
   selfcheck: 'Self-check steps the user ran on the work machine and recorded.',
 } as const;
 
@@ -90,6 +92,26 @@ export function renderMarkdown(r: Report): string {
   const rows = r.tasks.map(taskCells);
   if (!rows.length) rows.push(['none', 0, 0, 0, 'no run', 0, 0, 0, 0, 0, 0, 'not logged', 'none']);
   L.push(...table(head, rows), '');
+
+  const pt = r.perTicket ?? [];
+  L.push('## Per ticket', '', SECTION_TEXT.perTicket, '');
+  const ptRows: Array<Array<string | number>> = pt.map((t) => [
+    t.ticketHash.slice(0, 12),
+    t.criteria,
+    t.gateAttempts,
+    t.gateVerdict === 'none' ? 'no run' : t.gateVerdict,
+    t.denials,
+    t.testsEntries,
+    t.expectChanges,
+    t.sessions,
+    t.costUsd === undefined ? 'not recorded' : t.costUsd,
+    t.landing,
+    t.pullRequest ? 'yes' : 'no',
+    t.minutes === undefined ? 'not known' : t.minutes,
+  ]);
+  if (!ptRows.length) ptRows.push(['none', 0, 0, 'no run', 0, 0, 0, 0, 'not recorded', 'none', 'no', 'not known']);
+  L.push(...table(['Ticket', 'Criteria', 'Gate attempts', 'Gate verdict', 'Rail denials', 'Tests-phase entries', 'Expectation changes', 'Sessions', 'Cost (USD)', 'Landing', 'Pull request', 'Minutes'], ptRows), '');
+  L.push('## Rails', '', SECTION_TEXT.rails, '', ...countTable('Rail', 'Denials', r.rails ?? {}), '');
 
   const l = r.learning;
   L.push('## Learning loop', '', SECTION_TEXT.learning, '', ...table(['Event', 'Lessons'], [['captured', l.captured], ['proven', l.proven], ['approved', l.approved], ['expired', l.expired]]), '');

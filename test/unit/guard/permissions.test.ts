@@ -42,6 +42,16 @@ test('harness pr is denied in the rendered rules of all three agents, in both se
   }
 });
 
+test('harness jira is denied in the rendered rules of all three agents, in both settings; intake --jira stays unlisted', () => {
+  for (const setting of ['team', 'personal'] as const) {
+    const p = buildPermissions({ setting, protectedRoots: ROOTS, verificationAllow: [['harness', 'gate']], runsDir: '/home/u/.harness/runs' });
+    assert.ok(p.claude.deny.includes('Bash(harness jira)') && p.claude.deny.includes('Bash(harness jira *)'), `claude ${setting}`);
+    assert.ok(p.devin.deny.includes('Exec(harness jira)'), `devin ${setting}`);
+    assert.ok(p.codex.rules.some((r) => r.includes('["harness", "jira"]') && r.includes('forbidden')), `codex ${setting}`);
+    assert.ok(!p.claude.deny.some((d) => d.includes('harness intake')), `intake is not denied (${setting})`);
+  }
+});
+
 test('Claude rules use the documented syntax', () => {
   const p = buildPermissions({ setting: 'team', protectedRoots: ROOTS, verificationAllow: [['npm', 'test'], ['harness', 'gate']], runsDir: '/home/u/.harness/runs' });
   for (const r of [...p.claude.deny, ...p.claude.allow]) assert.match(r, CLAUDE_RULE_RE, r);

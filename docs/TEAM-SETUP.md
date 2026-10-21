@@ -100,6 +100,22 @@ under your Atlassian account's security settings, or a personal access token on
 Data Center). The harness only reads the issue, never stores the token, and
 calls only the host you set. Try it: `harness intake --jira SHOP-102`.
 
+Optional, to take the next ticket from a saved search instead of naming it:
+
+```powershell
+harness config set jira.filter "project = SHOP AND status = 'Ready for dev' ORDER BY priority DESC"
+harness intake --jira-next
+```
+
+Optional, to write back to Jira (you run these; the agent cannot): after the
+pull request is open, `harness jira comment --dry-run` shows the comment (the
+verification table, the gate verdict and the pull request link), and
+`harness jira comment` posts it to the ticket. `harness jira create --from blocked`
+(or `--from feedback`) prints a draft follow-up ticket and sends nothing until you add
+`--yes`; set the defaults once with `harness config set jira.project SHOP` and
+`harness config set jira.followupType Task`. The Jira account behind the token
+needs permission to comment and to create issues in that project.
+
 ### Mark the test database (if you skipped it, or have another)
 
 ```powershell

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import type { EvidenceFile } from '../../../src/types';
 import { buildBrief, runDir, saveBrief, type BriefFile } from '../../../src/intake/brief';
 import { artifactLabel, diffAgainst, gatherRepoWork, renderWriteup, verificationRows } from '../../../src/intake/writeup';
-import { setTaskPhase } from '../../../src/intake/phase';
+import { addExpectChange, setTaskPhase } from '../../../src/intake/phase';
 import { repoIdFor } from '../../../src/lib/config';
 import { writeJson } from '../../../src/lib/fsx';
 import { main as writeupMain } from '../../../src/commands/writeup';
@@ -182,6 +182,13 @@ test('writeup command: saves writeup.md in the run folder, counts tests-phase en
   assert.ok(fs.readFileSync(outside, 'utf8').includes('## Verification'));
   const none = await capture(() => writeupMain(['--task', 'nope', '--repo', repo]));
   assert.equal(none.code, 1);
+});
+
+test('writeup lists declared expectation changes in existing tests', async () => {
+  addExpectChange(repoId, brief.id, { file: 'test/orders.test.ts', reason: 'totals now include tax' });
+  const r = await capture(() => writeupMain(['--task', brief.id, '--repo', repo]));
+  assert.equal(r.code, 0, r.stderr);
+  assert.match(r.stdout, /Expectations changed in existing tests \(declared\): test\/orders\.test\.ts: totals now include tax/);
 });
 
 test('cross-repo write-ups: one per touched repo with a cross-reference section and the landing order', () => {

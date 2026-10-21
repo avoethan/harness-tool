@@ -16,6 +16,8 @@
  * `--jira <KEY>` reads the issue from Jira (read-only, token from the environment), saves it as
  * `<inbox>/<KEY>.txt` and runs the same intake on that file.
  *
+ * `--jira-next` takes the first issue of the `jira.filter` search (read-only) and then does the same.
+ *
  * Exit codes: 0 ok; 1 plan lint failed (the brief is saved and the problems
  * are listed), nothing found, or Jira refused; 2 usage (including `--jira` with `--from`, a bad
  * key, jira not set up, a missing token).
@@ -26,7 +28,7 @@ import type { CommandMeta } from '../cli';
 import { DEFAULT_BOOLEANS, flagBool, flagStr, parseArgv } from '../lib/argv';
 import { loadConfig, repoIdFor, resolveConfig } from '../lib/config';
 import { inboxHome } from '../lib/paths';
-import { fetchJiraTicket } from '../intake/jira';
+import { fetchJiraTicket, fetchNextJiraKey } from '../intake/jira';
 import { instrument } from '../lib/log';
 import { nearestRepoRoot } from '../lib/git';
 import { formatQuestionsBlock } from '../intake/ambiguity';
@@ -49,14 +51,14 @@ import {
 export const meta: CommandMeta = {
   name: 'intake',
   summary: 'Turn a pasted ticket into a brief with criteria, checks and units',
-  usage: 'harness intake (--from <file|-> | --jira <KEY>) [--repo <path>] [--unattended] [--json] | show [id] | answer <id> (--q <n> --answer "<text>" | --all-recommended) | lint [id] | list',
-  examples: ['harness intake --from ticket.txt', 'pbpaste | harness intake --from -', 'harness intake --jira SHOP-102', 'harness intake --from ticket.txt --unattended', 'harness intake show', 'harness intake answer t-1a2b3c4d5e --q 1 --answer B', 'harness intake answer t-1a2b3c4d5e --all-recommended'],
+  usage: 'harness intake (--from <file|-> | --jira <KEY> | --jira-next) [--repo <path>] [--unattended] [--json] | show [id] | answer <id> (--q <n> --answer "<text>" | --all-recommended) | lint [id] | list',
+  examples: ['harness intake --from ticket.txt', 'pbpaste | harness intake --from -', 'harness intake --jira SHOP-102', 'harness intake --jira-next', 'harness intake --from ticket.txt --unattended', 'harness intake show', 'harness intake answer t-1a2b3c4d5e --q 1 --answer B', 'harness intake answer t-1a2b3c4d5e --all-recommended'],
 };
 
 const MAX_TICKET_BYTES = 1024 * 1024;
 
 /** `--q <n>` takes a value here (globally `-q`/`--q` is the quiet switch). */
-const BOOLEANS = new Set([...DEFAULT_BOOLEANS, 'unattended', 'all-recommended'].filter((b) => b !== 'q'));
+const BOOLEANS = new Set([...DEFAULT_BOOLEANS, 'unattended', 'all-recommended', 'jira-next'].filter((b) => b !== 'q'));
 
 function readStdin(): string {
   try {
@@ -284,7 +286,22 @@ export async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
-  const jiraKey = flagStr(p, 'jira');
+  let jiraKey = flagStr(p, 'jira');
+  const jiraNext = p.flags['jira-next'] === true;
+  if (jiraNext && (p.flags.jira !== undefined || p.flags.from !== undefined || stdinDash || sub === 'from')) {
+    process.stderr.write('Use --jira-next, --jira <KEY> or --from <file|->, only one of them.\n');
+    return 2;
+  }
+  if (jiraNext) {
+    // Read-only: the first issue of jira.filter, then the same path as --jira <KEY>.
+    const next = await fetchNextJiraKey(loadConfig()?.jira);
+    if (!next.ok) {
+      process.stderr.write(`${next.message}\n`);
+      return next.exit;
+    }
+    jiraKey = next.key;
+    process.stderr.write(`The first ticket in the Jira filter is ${next.key}.\n`);
+  }
   if (p.flags.jira !== undefined && !jiraKey) {
     process.stderr.write('--jira takes an issue key, for example: harness intake --jira SHOP-102\n');
     return 2;
@@ -340,7 +357,7 @@ export async function main(argv: string[]): Promise<number> {
     return 2;
   }
   const ctx = ctxFor(repoFlag, flagBool(p, 'unattended') || process.env.HARNESS_UNATTENDED === '1');
-  const b = buildBrief(text, ctx);
+  const b = buildBrief(text, { ...ctx, ...(jiraKey ? { jiraKey } : {}) });
   saveBrief(b);
   setCurrent(b);
   logBrief('intake.brief', b, { lowConfidence: Object.values(b.criteriaMeta).filter((m) => m.parseConfidence < 0.7).length, hiddenRemoved: b.hiddenRemoved });

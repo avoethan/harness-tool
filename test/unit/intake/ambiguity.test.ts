@@ -105,6 +105,12 @@ test('plan lint rejects a criterion with no check and no question, a check that 
   assert.deepEqual(lintBrief({ criteria: [crit('AC1', true)], open: [] }), []);
 });
 
+test('plan lint counts a liveOptional api check as covered, like a unit check', () => {
+  const c: Criterion = { id: 'AC1', text: 'GET /health returns 200', kind: 'api', check: { kind: 'e2e-http', description: 'd', redFirst: true, liveOptional: true, liveOptionalRoute: 'GET /health' } };
+  assert.deepEqual(lintBrief({ criteria: [c], open: [] }), []);
+  assert.deepEqual(lintBrief({ criteria: [{ ...c, check: { ...c.check!, redFirst: false } }], open: [] }), ['AC1: the check is not marked red-first']);
+});
+
 test('plan lint rejects an empty brief unless a question asks for the criteria, and over-cap batches', () => {
   assert.deepEqual(lintBrief({ criteria: [], open: [] }), ['The brief has no acceptance criteria and no question asking for them.']);
   assert.deepEqual(lintBrief({ criteria: [], open: [{ blocking: true }] }), []);

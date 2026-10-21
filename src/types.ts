@@ -53,7 +53,7 @@ export interface HarnessConfig {
 }
 
 /**
- * Settings for `harness intake --jira <KEY>`. Names of environment variables, never the values:
+ * Settings for `harness intake --jira <KEY>`, `--jira-next` and `harness jira`. Names of environment variables, never the values:
  * the token is read from the environment at the moment of the request and is never stored.
  */
 export interface JiraConfig {
@@ -65,6 +65,12 @@ export interface JiraConfig {
   emailEnv?: string;
   /** Environment variable holding the API token or personal access token (default HARNESS_JIRA_TOKEN). */
   tokenEnv?: string;
+  /** `harness intake --jira-next`: a JQL string or a saved filter id (digits). */
+  filter?: string;
+  /** `harness jira create`: the default project key. */
+  project?: string;
+  /** `harness jira create`: the default issue type name (default "Task"). */
+  followupType?: string;
 }
 
 /**
@@ -561,6 +567,14 @@ export interface CheckSpec {
   greenAtBase?: boolean;
   /** Why the check is green at the base commit; shown in the write-up as "green-at-base: <reason>". */
   greenAtBaseReason?: string;
+  /**
+   * `e2e-http` checks with a status-only expectation: the gate's `e2e:<id>` step passes on a fresh passing
+   * artefact (as always) or on a passing unit test named `<id>:` whose file contains the route path.
+   * A check with a body, json, header or database expectation never carries this flag.
+   */
+  liveOptional?: boolean;
+  /** With `liveOptional`: the route the unit test has to name, `<METHOD> <path>`. */
+  liveOptionalRoute?: string;
   /** `gate` checks: gate step names that must have passed in this run (`lint`, `typecheck`, `build`, `tests:base`, `coverage`, `affected`, `standards`, `secrets`, `tamper`). */
   gateSteps?: string[];
   /** `gate` checks: repo-relative paths or folders; the change may touch nothing outside them. */
@@ -703,6 +717,27 @@ export interface TaskReportRow {
   capReached?: boolean;
 }
 
+/** One row of the report's per-ticket table: the headline numbers of the ticket's digest (`harness digest`). */
+export interface TicketRow {
+  ticketHash: string;
+  criteria: number;
+  gateAttempts: number;
+  gateVerdict: Verdict | 'none';
+  /** Tool calls the hooks denied in the task's sessions. */
+  denials: number;
+  testsEntries: number;
+  /** Declared expectation changes (`phase.json` `expectChanges`). */
+  expectChanges: number;
+  sessions: number;
+  /** Cost the runner recorded, when it did. */
+  costUsd?: number;
+  /** Landing outcome word, or `none`. */
+  landing: string;
+  pullRequest: boolean;
+  /** Minutes from the task's first to its last instrumentation event. */
+  minutes?: number;
+}
+
 export interface Report {
   version: 1;
   generatedAt: string;
@@ -721,6 +756,10 @@ export interface Report {
   selfcheck?: Partial<Record<AgentId, SelfcheckSummary>>;
   /** Rows of the user's work log the report read (`~/.harness/worklog.csv`). */
   worklogRows?: number;
+  /** One row per task folder with the digest's headline numbers. */
+  perTicket?: TicketRow[];
+  /** Tool calls the guard denied in the period, by rail. */
+  rails?: Record<string, number>;
 }
 
 export interface SelfcheckSummary {

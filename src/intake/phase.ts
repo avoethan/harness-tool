@@ -27,7 +27,19 @@ export interface PhaseRecord {
   /** How many times the task entered the tests phase. */
   testsEntries: number;
   history: Array<{ phase: TaskPhase; at: string; sessionId?: string }>;
+  /**
+   * Declared changes to an expectation in a test file that existed at the base commit
+   * (`harness phase tests --expect-change "<file> <reason>"`). The gate's tamper step accepts a changed
+   * assertion literal in a listed file; the write-up prints each entry.
+   */
+  expectChanges?: ExpectChange[];
   updatedAt: string;
+}
+
+export interface ExpectChange {
+  file: string;
+  reason: string;
+  at: string;
 }
 
 const MAX_HISTORY = 200;
@@ -65,8 +77,19 @@ export function setTaskPhase(repoId: string, taskId: string, phase: TaskPhase, o
     since: changed ? now : prev!.since,
     testsEntries: (prev?.testsEntries ?? 0) + (phase === 'tests' && changed ? 1 : 0),
     history: changed ? [...(prev?.history ?? []), { phase, at: now, ...(opts.sessionId ? { sessionId: opts.sessionId } : {}) }].slice(-MAX_HISTORY) : prev!.history,
+    ...(prev?.expectChanges?.length ? { expectChanges: prev.expectChanges } : {}),
     updatedAt: now,
   };
+  writeJson(phasePath(repoId, taskId), rec);
+  return rec;
+}
+
+/** Record a declared expectation change for a test file (one entry per file; a second declaration replaces the reason). */
+export function addExpectChange(repoId: string, taskId: string, change: { file: string; reason: string }, opts: { now?: Date } = {}): PhaseRecord {
+  const prev = readPhaseRecord(repoId, taskId) ?? setTaskPhase(repoId, taskId, 'tests', opts);
+  const at = (opts.now ?? new Date()).toISOString();
+  const file = change.file.replace(/\\/g, '/').replace(/^\.\//, '');
+  const rec: PhaseRecord = { ...prev, expectChanges: [...(prev.expectChanges ?? []).filter((e) => e.file !== file), { file, reason: change.reason, at }], updatedAt: at };
   writeJson(phasePath(repoId, taskId), rec);
   return rec;
 }

@@ -291,6 +291,44 @@ export function acceptanceOutcome(ctx: GateContext, c: Criterion): StepOutcome {
   return pass(`${counts.known ? `${counts.passed} test(s)` : 'the test'} named "${testNamePattern(c.id)} ..." passed; proven red at ${proof!.baseSha.slice(0, 10)}`);
 }
 
+/** The route path a liveOptional check wants a unit test to name (from `liveOptionalRoute`, else the command's `--path`). */
+export function liveOptionalPath(c: Criterion): string | null {
+  if (!c.check?.liveOptional) return null;
+  const r = /^\s*[A-Za-z]+\s+(\S+)\s*$/.exec(c.check.liveOptionalRoute ?? '');
+  if (r) return r[1];
+  const m = /--path\s+(?:"([^"]+)"|'([^']+)'|(\S+))/.exec(c.check.command ?? '');
+  return m ? (m[1] ?? m[2] ?? m[3] ?? null) : null;
+}
+
+/** Test files (working tree) that name a test `<id>: ...` and contain the route path. */
+function routeTestFiles(ctx: Pick<GateContext, 'entries' | 'nowText'>, c: Criterion): string[] {
+  const route = liveOptionalPath(c);
+  if (!route) return [];
+  return testFilesNaming(ctx, c.id).filter((f) => (ctx.nowText(f) ?? '').includes(route));
+}
+
+/**
+ * The unit path of a liveOptional (status-only api) check: a passing test named `<id>: ...` in a file that
+ * names the route. Used by the `e2e:<id>` step when there is no fresh passing artefact.
+ */
+export function liveOptionalTestOutcome(ctx: GateContext, c: Criterion): StepOutcome {
+  const route = c.check?.liveOptionalRoute ?? liveOptionalPath(c) ?? '<route>';
+  const want = `a unit test named "${testNamePattern(c.id)}" that names the route "${route}"`;
+  const files = routeTestFiles(ctx, c);
+  if (!files.length) return fail([`${c.id}: no test file has ${want}.`]);
+  const s = scriptCommand(ctx, 'test');
+  if (!s.ok) return fail([`${c.id}: ${s.reason}`]);
+  const filter = nameFilterArgs(s.cmd.runner, testNamePattern(c.id));
+  if (!filter) return fail([`${c.id}: the test runner of \`${s.cmd.display}\` cannot select a test by name, so the unit path cannot run on its own`]);
+  const r = runTests(s.cmd, [...reporterArgs(s.cmd.runner), ...filter], ctx.timeout('acceptance'));
+  const counts = parseCounts(s.cmd.runner, r.stdout);
+  if (counts.known && counts.passed + counts.failed === 0) return fail([`${c.id}: no test named "${testNamePattern(c.id)} ..." ran`]);
+  if (r.code !== 0 || counts.failed > 0) {
+    return fail(capReasons([`${c.id}: the acceptance test fails${counts.known ? ` (${counts.failed} failed)` : ` (exit ${r.timedOut ? 'timeout' : r.code})`}`, ...(counts.failures.length ? counts.failures.map((f) => `failing: ${redactText(f).slice(0, 200)}`) : failureLines(r, 8))], 12));
+  }
+  return pass(`${files[0]}: ${counts.known ? `${counts.passed} test(s)` : 'the test'} named "${testNamePattern(c.id)} ..." passed and names ${route} (live drive not needed: status-only check)`);
+}
+
 export function acceptanceSteps(ctx: GateContext): StepDef[] {
   const crits = unitCriteria(ctx);
   if (!crits.length && gateCriteria(ctx).length) return [];
@@ -337,7 +375,12 @@ export interface GateProved {
 }
 
 export function proveRed(ctx: GateContext): { results: RedResult[]; error?: string; note?: string; gate: GateProved[] } {
-  const crits = unitCriteria(ctx);
+  // a liveOptional (status-only api) check is proven like a unit check once a changed test names it
+  const changedTestFiles = ctx.diff.filter((d) => d.status !== 'D' && isTestFile(d.path)).map((d) => d.path);
+  const crits = [
+    ...unitCriteria(ctx),
+    ...ctx.criteria.filter((c) => c.check?.liveOptional && testFilesNaming(ctx, c.id).some((f) => changedTestFiles.includes(f))),
+  ];
   const gate: GateProved[] = gateCriteria(ctx).map((c) => ({ criterion: c.id, detail: `proved by the gate's own steps (${gateWhat(c.check!)}); nothing to run at the base commit` }));
   if (!ctx.brief) return { results: [], gate, error: 'no brief for this task (run `harness intake` or `harness task claim` first)' };
   if (!crits.length) {

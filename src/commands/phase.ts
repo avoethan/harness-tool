@@ -14,19 +14,21 @@
  */
 import * as path from 'node:path';
 import type { CommandMeta } from '../cli';
-import { flagBool, flagStr, parseArgv } from '../lib/argv';
+import { flagBool, flagStr, flagValues, parseArgv } from '../lib/argv';
 import { repoIdFor } from '../lib/config';
-import { nearestRepoRoot } from '../lib/git';
+import { nearestRepoRoot, rawGit } from '../lib/git';
 import { instrument } from '../lib/log';
 import { setPhase } from '../lib/session';
-import { getCurrentTask, validId } from '../intake/brief';
-import { readPhaseRecord, setTaskPhase, type TaskPhase } from '../intake/phase';
+import { getCurrentTask, loadBrief, runDir, validId } from '../intake/brief';
+import { addExpectChange, readPhaseRecord, setTaskPhase, type TaskPhase } from '../intake/phase';
+import { chooseBase, EMPTY_TREE, isTestFile } from '../gate/context';
+import { readJsonOr } from '../lib/fsx';
 
 export const meta: CommandMeta = {
   name: 'phase',
   summary: 'Enter the implement or tests phase for the current task',
-  usage: 'harness phase implement|tests|status [--task <id>] [--repo <path>] [--session <id>] [--json]',
-  examples: ['harness phase tests', 'harness phase implement', 'harness phase status --json'],
+  usage: 'harness phase implement|tests|status [--task <id>] [--repo <path>] [--session <id>] [--expect-change "<file> <reason>"] [--json]',
+  examples: ['harness phase tests', 'harness phase tests --expect-change "test/orders.test.ts totals now include tax"', 'harness phase implement', 'harness phase status --json'],
 };
 
 const EXPLAIN: Record<TaskPhase, string> = {
@@ -67,14 +69,51 @@ export async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  const declared: Array<{ file: string; reason: string }> = [];
+  for (const raw of flagValues(p, 'expect-change')) {
+    if (sub !== 'tests') {
+      process.stderr.write('--expect-change goes with `harness phase tests`: you declare an expectation change while you are changing tests.\n');
+      return 2;
+    }
+    const v = validateExpectChange(root, repoId, task, raw);
+    if (typeof v === 'string') {
+      process.stderr.write(v + '\n');
+      return 2;
+    }
+    declared.push(v);
+  }
+
   const sessionId = flagStr(p, 'session') ?? process.env.HARNESS_SESSION_ID ?? undefined;
-  const rec = setTaskPhase(repoId, task, sub, { ...(sessionId ? { sessionId } : {}) });
+  let rec = setTaskPhase(repoId, task, sub, { ...(sessionId ? { sessionId } : {}) });
+  for (const d of declared) rec = addExpectChange(repoId, task, d);
   if (sessionId) setPhase(sessionId, sub);
   instrument({ event: 'phase.set', task, repo: repoId, ...(sessionId ? { sessionId } : {}), ids: { phase: sub }, counts: { testsEntries: rec.testsEntries } });
   if (json) process.stdout.write(JSON.stringify(rec, null, 2) + '\n');
   else {
     process.stdout.write(`Task ${task}: phase ${sub}${sub === 'tests' ? ` (entry ${rec.testsEntries})` : ''}.${sessionId ? '' : ' (No session id given: recorded for the task only.)'}\n`);
     process.stdout.write(EXPLAIN[sub] + '\n');
+    for (const d of declared) process.stdout.write(`Declared: the expectations in ${d.file} change (${d.reason}). The write-up will list it.\n`);
   }
   return 0;
+}
+
+/**
+ * `--expect-change "<file> <reason>"`: the file is a test file that exists at the task's base commit and the
+ * reason says why its expectation changes. Returns the entry or a message.
+ */
+function validateExpectChange(root: string, repoId: string, task: string, raw: string): { file: string; reason: string } | string {
+  const m = /^(\S+)\s+(\S[\s\S]*)$/.exec(raw.trim());
+  if (!m) return '--expect-change takes "<file> <reason>": the test file, then why its expectation changes (for example "test/orders.test.ts totals now include tax").';
+  let file = m[1].replace(/\\/g, '/');
+  if (path.isAbsolute(file)) file = path.relative(root, file).split(path.sep).join('/');
+  file = path.posix.normalize(file).replace(/^\.\//, '');
+  if (!file || file.startsWith('../') || file === '..') return `--expect-change: ${m[1]} is not inside this repository; give the path relative to the repo root.`;
+  if (!isTestFile(file)) return `--expect-change: ${file} is not a test file, so there is no expectation to change in it.`;
+  const brief = loadBrief(task);
+  const prev = readJsonOr<{ baseSha?: string } | null>(path.join(runDir(repoId, task), 'evidence.json'), null);
+  const { base } = chooseBase(root, 'task', { brief, repoId, previousBase: prev?.baseSha });
+  if (base === EMPTY_TREE || rawGit(root, ['cat-file', '-e', `${base}:${file}`], 10_000).code !== 0) {
+    return `--expect-change: ${file} does not exist at the base commit (${base === EMPTY_TREE ? 'none yet' : base.slice(0, 10)}). It is a new test file, which needs no declaration.`;
+  }
+  return { file, reason: m[2].trim().slice(0, 300) };
 }

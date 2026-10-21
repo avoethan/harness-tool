@@ -1037,6 +1037,21 @@ export function checkFor(id: string, text: string, kind: CriterionKind, facts: C
           unclear,
         };
       }
+      // a status-only expectation on a known route: a live drive, or a unit test that names the route, proves it
+      const statusOnly = !!route && !bodyFacts.length && !headers.length && !nf && !facts.tables.length && !facts.columns.length;
+      if (statusOnly) {
+        return {
+          check: {
+            kind: 'e2e-http',
+            description: `${method} ${routePath} -> ${status}${where}; live drive, or a unit test named "${id}:" that names the route "${method} ${routePath}"`,
+            command: parts.join(' '),
+            redFirst: true,
+            liveOptional: true,
+            liveOptionalRoute: `${method} ${routePath}`,
+          },
+          unclear,
+        };
+      }
       return {
         check: { kind: 'e2e-http', description: `${method} ${routePath} -> ${status}${body}${where}`, command: parts.join(' '), redFirst: true },
         unclear,

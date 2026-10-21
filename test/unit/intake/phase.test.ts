@@ -73,3 +73,31 @@ test('phase command: current task, --task, --session writes the session state to
   r = await capture(() => phaseMain(['review', '--repo', repo]));
   assert.equal(r.code, 2);
 });
+
+test('phase tests --expect-change: records {file, reason, at}; the file must exist at the base commit and be a test file', async () => {
+  const svc = gitRepo(path.join(h.workspace, 'svc-exp'), { 'src/a.js': 'exports.a = 1;\n', 'test/a.test.js': "const assert = require('node:assert');\nassert.equal(1, 1);\n" });
+  const id = repoIdFor(svc);
+  setCurrentTask(id, 't-exp');
+  let r = await capture(() => phaseMain(['tests', '--repo', svc, '--expect-change', 'test/a.test.js a now returns 2']));
+  assert.equal(r.code, 0, r.stderr);
+  assert.match(r.stdout, /Declared: the expectations in test\/a\.test\.js change \(a now returns 2\)/);
+  const rec = readPhaseRecord(id, 't-exp')!;
+  assert.equal(rec.phase, 'tests');
+  assert.equal(rec.expectChanges?.length, 1);
+  assert.equal(rec.expectChanges![0].file, 'test/a.test.js');
+  assert.equal(rec.expectChanges![0].reason, 'a now returns 2');
+  assert.ok(!Number.isNaN(Date.parse(rec.expectChanges![0].at)));
+  // switching phase keeps the declaration
+  setTaskPhase(id, 't-exp', 'implement');
+  assert.equal(readPhaseRecord(id, 't-exp')!.expectChanges?.length, 1);
+  // refusals leave the record alone and exit 2
+  for (const bad of ['test/new.test.js is a new file', 'src/a.js not a test', 'test/a.test.js', '../x.test.js escape']) {
+    r = await capture(() => phaseMain(['tests', '--repo', svc, '--expect-change', bad]));
+    assert.equal(r.code, 2, bad);
+  }
+  assert.match((await capture(() => phaseMain(['tests', '--repo', svc, '--expect-change', 'test/new.test.js x']))).stderr, /does not exist at the base commit/);
+  assert.match((await capture(() => phaseMain(['tests', '--repo', svc, '--expect-change', 'src/a.js x']))).stderr, /not a test file/);
+  r = await capture(() => phaseMain(['implement', '--repo', svc, '--expect-change', 'test/a.test.js x']));
+  assert.equal(r.code, 2);
+  assert.equal(readPhaseRecord(id, 't-exp')!.expectChanges?.length, 1);
+});

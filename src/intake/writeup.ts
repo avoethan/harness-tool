@@ -240,6 +240,8 @@ export function renderWriteup(input: WriteupInput, work: RepoWork): string {
   const entries = work.phase?.testsEntries ?? 0;
   const tamper = ev ? `the gate's tamper check ran after them (verdict ${ev.verdict})` : 'the gate has not checked them yet';
   L.push(entries ? `Tests were added or changed in the tests phase (entered ${entries} time(s)); ${tamper}.` : 'The tests phase was not entered for this task (no test files were changed through it).', '');
+  const declared = work.phase?.expectChanges ?? [];
+  if (declared.length) L.push(`Expectations changed in existing tests (declared): ${declared.map((e) => `${e.file}: ${short(e.reason, 160)}`).join('; ')}.`, '');
 
   L.push('## Assumptions');
   if (!brief.assumptions.length) L.push('- None.');

@@ -23,6 +23,7 @@ import type { GateContext } from './context';
 import { readJsonOr } from '../lib/fsx';
 import { sha256 } from '../lib/hash';
 import { fail, pass, skip, type StepDef, type StepOutcome } from './steps';
+import { liveOptionalTestOutcome } from './tests';
 
 export interface E2EArtefact {
   id: string;
@@ -83,7 +84,7 @@ export function e2eCriteria(ctx: Pick<GateContext, 'criteria'>): Array<{ c: Crit
   return ctx.criteria.map((c) => ({ c, kind: neededKind(c) })).filter((x): x is { c: Criterion; kind: 'http' | 'db' } => !!x.kind);
 }
 
-export function e2eOutcome(ctx: Pick<GateContext, 'runDir' | 'tree'>, c: Criterion, kind: 'http' | 'db', arts = listArtefacts(ctx.runDir)): StepOutcome {
+function liveOutcome(ctx: Pick<GateContext, 'runDir' | 'tree'>, c: Criterion, kind: 'http' | 'db', arts: E2EArtefact[]): StepOutcome {
   const want = `${c.id}-${kind}`;
   const named = arts.filter((a) => a.id === want || a.rel === `e2e/${want}.json` || (a.criterion === c.id && a.kind === kind));
   // a check that launches with `--db-unreachable` is only met by an artefact of such a launch
@@ -97,6 +98,18 @@ export function e2eOutcome(ctx: Pick<GateContext, 'runDir' | 'tree'>, c: Criteri
   const good = fresh.filter((a) => a.passed !== false);
   if (!good.length) return fail([`${c.id}: the ${want} artefact on the current tree records a failed check; fix the behaviour and run it again.${run}`]);
   return pass(`${good[0].rel} on the current tree${good[0].passed === null ? ' (no pass/fail field; the write-up shows it for review)' : ''}`);
+}
+
+export function e2eOutcome(ctx: Pick<GateContext, 'runDir' | 'tree'> & Partial<GateContext>, c: Criterion, kind: 'http' | 'db', arts = listArtefacts(ctx.runDir)): StepOutcome {
+  const live = liveOutcome(ctx, c, kind, arts);
+  if (live.status === 'pass' || !c.check?.liveOptional || kind !== 'http') return live;
+  // a failed drive on the current tree is a failure a unit test does not undo
+  if (live.reasons.some((r) => /records a failed check/.test(r))) return live;
+  if (!ctx.entries || !ctx.nowText) return live;
+  const unit = liveOptionalTestOutcome(ctx as GateContext, c);
+  if (unit.status === 'pass') return unit;
+  const route = c.check.liveOptionalRoute ?? 'the route';
+  return fail([...live.reasons, `Or, since this check only expects a status: a passing unit test named "${c.id}:" in a test file that names the route "${route}". ${unit.reasons.join(' ')}`]);
 }
 
 function artefactsDigest(runDir: string): string {

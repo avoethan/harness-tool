@@ -204,6 +204,7 @@ harness db mark --server localhost,1433 --database shop_test --test   # mark a t
 harness db list                 # what is marked
 harness learn review            # approve or reject lessons the agents learned
 harness report --md             # the summary report (counts only)
+harness digest                  # one page per ticket: gate, rails, tests phase, landing (names and counts)
 harness config get              # current settings; `config set <key> <value>` changes one
 ```
 

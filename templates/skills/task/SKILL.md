@@ -202,6 +202,10 @@ records their artefacts on the changed code.
 
 Do not weaken a check to make it pass later. Deleting a test, adding
 `.only`/`.skip`, or dropping assertions is caught by the gate's tamper step.
+So is changing the expected value in a test that already existed. When the
+ticket really changes that behaviour, declare it:
+`harness phase tests --expect-change "<test file> <why the expectation changes>"`
+(the file must exist at the base commit; the write-up lists it for review).
 If a check is wrong, come back to this phase (`harness phase tests`), fix it,
 and prove it red again; each entry is counted and shown in the write-up.
 
@@ -231,6 +235,13 @@ Expected: `Task <id>: phase implement.` Test files are read-only now.
 
 Only when the brief has an `api` or `db` criterion. With none, skip this
 phase: do not launch or drive anything.
+
+An `api` criterion whose check says "live optional" expects only a status. When
+every `api` criterion is marked "live optional" and you wrote the route tests
+(each test named `<id>:` and naming the route, as the check says), you may skip
+launch and drive: the gate accepts the passing test. Any `api` criterion that
+expects a body, JSON, a header, a timing or a database effect, and every `db`
+criterion, still needs the live drive.
 
 For every `api` and `db` criterion, run the brief's `run:` line against the
 running service and the test database, as printed: it ends with
