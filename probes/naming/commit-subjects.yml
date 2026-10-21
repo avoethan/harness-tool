@@ -1,0 +1,24 @@
+# Commit-subject convention (git log subjects, merge commits excluded).
+# Family "naming": a subject convention is a naming rule for commits.
+id: naming.commit-subjects
+engine: subjects
+family: naming
+title: Commit-subject convention
+site: the subject line of a non-merge commit (most recent 2,000 per repository)
+conforming: the subject follows the dominant convention
+polarity: either
+declaredBy: { commitlint: { conventional: conventional } }
+check: { type: regex, ref: commit-subject }
+variants:
+  - name: conventional
+    pattern: '^(?:feat|fix|chore|docs|style|refactor|perf|test|tests|build|ci|revert)(?:\([\w./ -]+\))?!?: \S'
+    statement: 'Commit subjects follow Conventional Commits: `type(scope): summary` with type one of {TYPES}, an optional scope, a lower-case summary, no trailing period, at most {MAXLEN} characters.'
+    fixText: 'Write the subject as `type(scope): summary`, for example `fix(orders): reject unknown status`; for a revert use `revert: <original subject>` rather than git''s default `Revert "..."`.'
+    prose: ['conventional commits?', 'type\(scope\)', 'commit (subjects?|messages?)']
+  - name: ticket
+    pattern: '^\[?[A-Z][A-Z0-9]+-\d+\]?[:\s]'
+    statement: 'Commit subjects start with the ticket key (ABC-123: summary).'
+    fixText: 'Start the subject with the ticket key, for example `ABC-123: summary`.'
+    prose: ['ticket (key|id|number)', 'jira']
+  - name: other
+    pattern: '^(?!(?:feat|fix|chore|docs|style|refactor|perf|test|tests|build|ci|revert)(?:\([\w./ -]+\))?!?: \S)(?!\[?[A-Z][A-Z0-9]+-\d+\]?[:\s])'

@@ -1,0 +1,21 @@
+# One gateway module per package imports a database or infrastructure driver.
+# Built in (src/discover/builtins.ts: import-gateway): reads the import table
+# of every module. A record is made per driver; its id is
+# layout.driver-gateway-<driver>.
+id: layout.driver-gateway
+engine: builtin
+builtin: import-gateway
+family: layout
+title: One module per package imports the driver
+site: a source module (outside tests) in a package whose manifest depends on the driver
+conforming: the module does not import the driver, or it is the package's single importer (the gateway)
+polarity: fixed
+params:
+  drivers: [mssql, tedious, pg, postgres, mysql, mysql2, mariadb, oracledb, better-sqlite3, sqlite3, mongodb, mongoose, redis, ioredis, knex, '@prisma/client', typeorm, sequelize, kysely, drizzle-orm, '@aws-sdk/client-dynamodb', amqplib, kafkajs]
+check: { type: regex }
+variants:
+  - name: gateway
+    statement: 'Only {GATEWAY} imports `{DRIVER}`; every other module goes through it.'
+    fixText: 'Do not import `{DRIVER}` here; call the functions exported by {GATEWAY} (add one there if it is missing).'
+    prose: ['(only|no other) (file|module)\b.{0,40}\bimports?\b', 'goes? through `?src/db', 'all database access goes through']
+  - name: bypass

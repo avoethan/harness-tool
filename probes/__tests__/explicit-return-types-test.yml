@@ -1,0 +1,16 @@
+id: lint.explicit-return-types/typed
+valid:
+  - 'function f(a: number) { return a; }'
+  - 'const g = (a: number): number => a;'
+invalid:
+  - 'function f(a: number): number { return a; }'
+  - 'export async function load(id: number): Promise<Order> { return get(id); }'
+  - 'export function isPositive(v: unknown): v is number { return typeof v === "number"; }'
+---
+id: lint.explicit-return-types/untyped
+valid:
+  - 'function f(): void {}'
+  - 'const g = () => 1;'
+invalid:
+  - 'function f(a: number) { return a; }'
+  - 'export async function closePool() { await pool.close(); }'

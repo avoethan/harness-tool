@@ -1,0 +1,14 @@
+id: format.trailing-commas/trailing
+valid:
+  - "const a = { x: 1 };"
+  - "const b = {\n  x: 1\n};"
+invalid:
+  - "const b = {\n  x: 1,\n};"
+  - "call(\n  a,\n  b,\n);"
+---
+id: format.trailing-commas/none
+valid:
+  - "const b = {\n  x: 1,\n};"
+  - "const a = [1, 2];"
+invalid:
+  - "const b = {\n  x: 1\n};"

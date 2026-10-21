@@ -1,0 +1,13 @@
+id: format.semicolons/always
+valid:
+  - 'const a = 1'
+invalid:
+  - 'const a = 1;'
+  - 'foo();'
+---
+id: format.semicolons/never
+valid:
+  - 'const a = 1;'
+invalid:
+  - 'const a = 1'
+  - 'foo()'

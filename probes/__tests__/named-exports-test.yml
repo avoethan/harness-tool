@@ -1,0 +1,15 @@
+id: layout.named-exports/named
+valid:
+  - 'export default function f() {}'
+  - 'const x = 1;'
+invalid:
+  - 'export function f() {}'
+  - 'export const productsRouter = Router();'
+  - 'export { a, b };'
+---
+id: layout.named-exports/default
+valid:
+  - 'export function f() {}'
+invalid:
+  - 'export default function f() {}'
+  - 'export default router;'

@@ -1,0 +1,48 @@
+# Error responses: res.status(4xx/5xx).json({ error: ... }) shapes
+# (informational: keys feed the judgment bundle).
+id: api.error-status-body/error-key
+language: TypeScript
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: property, regex: '^json$' }
+          - has: { field: object, kind: call_expression, regex: '\.status\(\s*[45]\d\d' }
+    - has:
+        field: arguments
+        has: { nthChild: 1, kind: object, regex: '^\{\s*error\b' }
+metadata:
+  harness:
+    probe: api.error-status-body
+    family: api
+    title: Error response body
+    site: a res.status(4xx|5xx).json(...) call
+    conforming: informational (body keyed by `error` or another shape)
+    polarity: either
+    record: false
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: error-key
+---
+id: api.error-status-body/other
+language: TypeScript
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: property, regex: '^json$' }
+          - has: { field: object, kind: call_expression, regex: '\.status\(\s*[45]\d\d' }
+    - not:
+        has:
+          field: arguments
+          has: { nthChild: 1, kind: object, regex: '^\{\s*error\b' }
+metadata:
+  harness:
+    probe: api.error-status-body
+    variant: other

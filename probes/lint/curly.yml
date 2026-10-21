@@ -1,0 +1,53 @@
+# Braces around if/else/loop bodies.
+id: lint.curly/braced
+language: TypeScript
+rule:
+  any:
+    - kind: if_statement
+      has: { field: consequence, kind: statement_block }
+    - kind: else_clause
+      has: { kind: statement_block }
+    - kind: for_statement
+      has: { field: body, kind: statement_block }
+    - kind: for_in_statement
+      has: { field: body, kind: statement_block }
+    - kind: while_statement
+      has: { field: body, kind: statement_block }
+    - kind: do_statement
+      has: { field: body, kind: statement_block }
+metadata:
+  harness:
+    probe: lint.curly
+    family: lint
+    title: Braces around control-flow bodies
+    site: the body of an if, else (not else-if), for, for-in/of, while or do statement
+    conforming: the body is a braced block
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    declaredBy: { eslint: [curly] }
+    check: { type: eslint, ref: curly }
+    variant: braced
+    statement: 'Every if/else/loop body is a braced block, even a one-liner.'
+    fixText: 'Wrap the body in braces: `if (x) { return; }` instead of `if (x) return;`.'
+    prose: ['curly', 'braces? (around|for) (every|all|one-line)', 'always use braces']
+---
+id: lint.curly/unbraced
+language: TypeScript
+rule:
+  any:
+    - kind: if_statement
+      has: { field: consequence, not: { kind: statement_block } }
+    - kind: else_clause
+      not: { has: { any: [ { kind: statement_block }, { kind: if_statement } ] } }
+    - kind: for_statement
+      has: { field: body, not: { kind: statement_block } }
+    - kind: for_in_statement
+      has: { field: body, not: { kind: statement_block } }
+    - kind: while_statement
+      has: { field: body, not: { kind: statement_block } }
+    - kind: do_statement
+      has: { field: body, not: { kind: statement_block } }
+metadata:
+  harness:
+    probe: lint.curly
+    variant: unbraced

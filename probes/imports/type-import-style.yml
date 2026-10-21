@@ -1,0 +1,36 @@
+# How type-only imports are written: `import type { X }` or `import { type X }`.
+id: imports.type-import-style/separate
+language: TypeScript
+rule:
+  kind: import_statement
+  regex: '^import\s+type\s'
+metadata:
+  harness:
+    probe: imports.type-import-style
+    family: imports
+    title: Type-only import style
+    site: an import statement that imports types with the `type` modifier
+    conforming: it uses the dominant form
+    polarity: either
+    declaredBy: { eslint: ['@typescript-eslint/consistent-type-imports'] }
+    check: { type: ast-grep }
+    variant: separate
+    statement: 'Type-only imports use a separate `import type { X } from ...` statement.'
+    fixText: "Move the types into their own statement: import type { Request } from 'express';"
+    prose: ['import type']
+---
+id: imports.type-import-style/inline
+language: TypeScript
+rule:
+  kind: import_statement
+  not: { regex: '^import\s+type\s' }
+  has:
+    stopBy: end
+    kind: import_specifier
+    regex: '^type\s'
+metadata:
+  harness:
+    probe: imports.type-import-style
+    variant: inline
+    statement: 'Type-only imports are marked inline: `import { type X, y } from ...`.'
+    fixText: "Mark the type inline: import { type Request, Router } from 'express';"

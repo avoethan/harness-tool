@@ -1,0 +1,12 @@
+id: sql.keyword-case/upper
+valid:
+  - "q('select id from dbo.orders where id = @id');"
+invalid:
+  - "q('SELECT id FROM dbo.orders WHERE id = @id');"
+---
+id: sql.keyword-case/lower
+valid:
+  - "q('SELECT id FROM dbo.orders');"
+  - "say('please select one');"
+invalid:
+  - "q('select id from dbo.orders where id = @id');"

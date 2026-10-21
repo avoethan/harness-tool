@@ -1,0 +1,12 @@
+id: format.indent-width/two
+valid:
+  - "function f() {\n    return 1;\n}\n"
+  - "/**\n * doc\n */\n"
+invalid:
+  - "function f() {\n  if (a) {\n    return 1;\n  }\n}\n"
+---
+id: format.indent-width/four
+valid:
+  - "function f() {\n  if (a) {\n    return 1;\n  }\n}\n"
+invalid:
+  - "function f() {\n    return 1;\n}\n"

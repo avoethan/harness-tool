@@ -1,0 +1,19 @@
+id: lint.disable-directives/eslint-disable
+valid:
+  - 'const a = 1; // plain comment'
+invalid:
+  - '// eslint-disable-next-line no-console'
+  - '/* eslint-disable */'
+---
+id: lint.disable-directives/ts-ignore
+valid:
+  - '// @ts-expect-error reason'
+invalid:
+  - '// @ts-ignore'
+  - '// @ts-nocheck'
+---
+id: lint.disable-directives/ts-expect-error
+valid:
+  - '// @ts-ignore'
+invalid:
+  - '// @ts-expect-error the library types are wrong'

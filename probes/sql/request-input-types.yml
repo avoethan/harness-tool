@@ -1,0 +1,60 @@
+# mssql parameter binding: request.input(name, value) or with an explicit type.
+id: sql.request-input-types/typed
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: property, regex: '^input$' }
+      # an mssql request (request, req, pool.request(), new sql.Request(tx)); not fireEvent.input(el, init)
+      - has: { field: object, regex: '(?i)request|^req$' }
+  all:
+    - has:
+        field: arguments
+        has: { nthChild: 1, any: [ { kind: string }, { kind: identifier }, { kind: template_string } ] }
+    - has:
+        field: arguments
+        has: { nthChild: 3 }
+metadata:
+  harness:
+    probe: sql.request-input-types
+    family: sql
+    title: Typed mssql parameters
+    site: a `.input(name, ...)` call on an mssql request
+    conforming: it follows the dominant form (with or without an explicit SQL type)
+    polarity: either
+    check: { type: ast-grep }
+    variant: typed
+    statement: 'mssql parameters are bound with an explicit SQL type: request.input(name, sql.Int, value).'
+    fixText: 'Pass the SQL type as the second argument: request.input("id", sql.Int, id).'
+---
+id: sql.request-input-types/untyped
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: property, regex: '^input$' }
+      # an mssql request (request, req, pool.request(), new sql.Request(tx)); not fireEvent.input(el, init)
+      - has: { field: object, regex: '(?i)request|^req$' }
+  all:
+    - has:
+        field: arguments
+        has: { nthChild: 2 }
+    - not:
+        has:
+          field: arguments
+          has: { nthChild: 3 }
+    - has:
+        field: arguments
+        has: { nthChild: 1, any: [ { kind: string }, { kind: identifier }, { kind: template_string } ] }
+metadata:
+  harness:
+    probe: sql.request-input-types
+    variant: untyped
+    statement: 'mssql parameters are bound by name and value only: request.input(name, value).'
+    fixText: 'Bind the parameter as request.input(name, value).'

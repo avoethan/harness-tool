@@ -1,0 +1,14 @@
+id: sql.select-columns/explicit
+valid:
+  - "q('SELECT * FROM dbo.t');"
+  - "log('hello');"
+invalid:
+  - "q('SELECT id, name FROM dbo.t WHERE id = @id');"
+  - 'q(`SELECT TOP (@limit) o.id FROM dbo.orders o`);'
+---
+id: sql.select-columns/star
+valid:
+  - "q('SELECT id, name FROM dbo.t');"
+invalid:
+  - "q('SELECT * FROM dbo.t');"
+  - "q('SELECT TOP 10 o.* FROM dbo.orders o');"

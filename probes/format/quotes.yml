@@ -1,0 +1,39 @@
+# String quote style. Strings that contain the other quote character are not
+# sites: formatters keep them as they are to avoid escapes.
+id: format.quotes/single
+language: TypeScript
+rule:
+  kind: string
+  regex: "^'"
+  not: { regex: '"' }
+metadata:
+  harness:
+    probe: format.quotes
+    family: format
+    title: String quote style
+    site: a string literal that contains neither kind of quote character inside
+    conforming: it uses the dominant quote character
+    polarity: either
+    languages: [TypeScript, Tsx, JavaScript]
+    declaredBy:
+      prettier: { singleQuote: { 'true': single, 'false': double, default: double } }
+      biome: { javascript.formatter.quoteStyle: { single: single, double: double } }
+    check: { type: config, ref: formatter }
+    variant: single
+    statement: "Strings use single quotes ('like this'), except where that would need escaping."
+    fixText: "Use single quotes; the repo's formatter (for example `npm run format`) rewrites them."
+    prose: ['single quotes?', "singleQuote"]
+---
+id: format.quotes/double
+language: TypeScript
+rule:
+  kind: string
+  regex: '^"'
+  not: { regex: "'" }
+metadata:
+  harness:
+    probe: format.quotes
+    variant: double
+    statement: 'Strings use double quotes ("like this"), except where that would need escaping.'
+    fixText: "Use double quotes; the repo's formatter (for example `npm run format`) rewrites them."
+    prose: ['double quotes?']

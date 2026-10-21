@@ -1,0 +1,62 @@
+# SQL text handed to a call: a literal, or built with ${} / string concatenation.
+# A site is any call whose first argument is SQL text (recognised by its
+# statement shape), whatever the function is called (query, execute, raw ...).
+id: sql.sql-text-literal/literal
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: arguments
+    has:
+      nthChild: 1
+      any:
+        - kind: string
+        - kind: template_string
+          not: { has: { kind: template_substitution } }
+      regex: '(?i)\b(select\s[\s\S]+?\sfrom|insert\s+into|update\s+[\w.\[\]"]+\s+set|delete\s+from|merge\s+(into\s+)?[\w.\[\]]+|exec(ute)?\s+[\w.\[\]]+|create\s+(table|index|view|proc|procedure)|alter\s+table|drop\s+table|truncate\s+table)\b'
+metadata:
+  harness:
+    probe: sql.sql-text-literal
+    family: sql
+    title: SQL text is a literal; values are parameters
+    site: a call whose first argument is SQL text (SELECT ... FROM, INSERT INTO, UPDATE ... SET, DELETE FROM, MERGE, EXEC, DDL)
+    conforming: the SQL text is a plain literal with no ${} interpolation and no + concatenation
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: literal
+    statement: 'SQL text is a literal at the call site (no ${} interpolation, no string concatenation); values are passed as named parameters (@name in the SQL, the value in the params object).'
+    fixText: "Keep the SQL text constant and pass the value as a parameter: query('SELECT ... WHERE name LIKE @q', { q: `%${q}%` })."
+    prose: ['named parameters?', 'parameteri[sz]ed', '@name', 'SQL text .{0,40}constant', 'never (interpolate|concatenate)', 'request\.input']
+---
+id: sql.sql-text-literal/interpolated
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: arguments
+    has:
+      nthChild: 1
+      kind: template_string
+      has: { kind: template_substitution }
+      regex: '(?i)\b(select\s[\s\S]+?\sfrom|insert\s+into|update\s+[\w.\[\]"]+\s+set|delete\s+from|merge\s+(into\s+)?[\w.\[\]]+|exec(ute)?\s+[\w.\[\]]+|create\s+(table|index|view|proc|procedure)|alter\s+table|drop\s+table|truncate\s+table)\b'
+metadata:
+  harness:
+    probe: sql.sql-text-literal
+    variant: interpolated
+---
+id: sql.sql-text-literal/concatenated
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: arguments
+    has:
+      nthChild: 1
+      kind: binary_expression
+      has: { field: operator, regex: '^\+$' }
+      regex: '(?i)\b(select\s[\s\S]+?\sfrom|insert\s+into|update\s+[\w.\[\]"]+\s+set|delete\s+from|merge\s+(into\s+)?[\w.\[\]]+|exec(ute)?\s+[\w.\[\]]+|create\s+(table|index|view|proc|procedure)|alter\s+table|drop\s+table|truncate\s+table)\b'
+metadata:
+  harness:
+    probe: sql.sql-text-literal
+    variant: concatenated

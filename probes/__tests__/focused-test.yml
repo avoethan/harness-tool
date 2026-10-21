@@ -1,0 +1,16 @@
+id: tests.focused/focused
+valid:
+  - "it('x', () => {});"
+  - "describe.skip('y', () => {});"
+invalid:
+  - "it.only('x', () => {});"
+  - "fdescribe('y', () => {});"
+---
+id: tests.focused/skipped
+valid:
+  - "it('x', () => {});"
+  - "test.only('x', () => {});"
+invalid:
+  - "describe.skip('y', () => {});"
+  - "xit('x', () => {});"
+  - "it.todo('later');"

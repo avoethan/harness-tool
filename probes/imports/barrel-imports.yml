@@ -1,0 +1,21 @@
+# Relative imports of a folder's index file (barrel) versus the module file
+# itself. Built in (src/discover/builtins.ts: barrel-imports): the specifier
+# is resolved against the file system.
+id: imports.barrel-imports
+engine: builtin
+builtin: barrel-imports
+family: imports
+title: Barrel (index) imports
+site: a relative import that resolves to a file in the same package
+conforming: it imports the module file directly, or a folder index, per the dominant style
+polarity: either
+check: { type: regex }
+variants:
+  - name: direct
+    default: true
+    statement: 'Relative imports name the module file (./lib/money), not a folder index (./lib).'
+    fixText: 'Import from the module file itself rather than the folder index.'
+  - name: barrel
+    statement: 'Relative imports go through folder index files (./lib), not individual module files.'
+    fixText: 'Export the symbol from the folder index and import the folder.'
+    prose: ['barrel', 'index\.ts']

@@ -1,0 +1,31 @@
+# Return types on function declarations in production code.
+id: lint.explicit-return-types/typed
+language: TypeScript
+rule:
+  kind: function_declaration
+  has: { field: return_type, regex: '\S' }
+metadata:
+  harness:
+    probe: lint.explicit-return-types
+    family: lint
+    title: Explicit return types on function declarations
+    site: a `function name(...)` declaration outside test files
+    conforming: the declaration states its return type
+    polarity: fixed
+    exclude: ['**/*.test.*', '**/*.spec.*', '**/test/**', '**/tests/**', '**/__tests__/**', '**/*.d.ts']
+    declaredBy: { eslint: ['@typescript-eslint/explicit-function-return-type'] }
+    check: { type: eslint, ref: '@typescript-eslint/explicit-function-return-type' }
+    variant: typed
+    statement: 'Function declarations state their return type (`function f(...): Promise<Order>`).'
+    fixText: 'Add the return type after the parameter list, for example `): Promise<Order[]>` or `): void`.'
+    prose: ['explicit return types?', 'return types? (on|for) (every|all|exported)']
+---
+id: lint.explicit-return-types/untyped
+language: TypeScript
+rule:
+  kind: function_declaration
+  not: { has: { field: return_type, regex: '\S' } }
+metadata:
+  harness:
+    probe: lint.explicit-return-types
+    variant: untyped

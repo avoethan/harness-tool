@@ -1,0 +1,25 @@
+# LF or CRLF line endings (per file).
+id: format.line-endings
+engine: content
+family: format
+title: Line endings
+site: a source file with at least one line break
+conforming: it uses the dominant line ending
+polarity: either
+formatterOwned: true
+params: { unit: file }
+files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', '**/*.mts', '**/*.cts', '**/*.sql']
+declaredBy:
+  prettier: { endOfLine: { lf: lf, crlf: crlf, default: lf } }
+  editorconfig: { end_of_line: { lf: lf, crlf: crlf } }
+check: { type: config, ref: formatter }
+variants:
+  - name: lf
+    pattern: '^[^\r]*\n[^\r]*$'
+    default: true
+    statement: 'Files use LF line endings.'
+    fixText: 'Convert the file to LF line endings (the formatter or `git add --renormalize`).'
+  - name: crlf
+    pattern: '\r\n'
+    statement: 'Files use CRLF line endings.'
+    fixText: 'Convert the file to CRLF line endings.'

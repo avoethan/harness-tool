@@ -1,0 +1,34 @@
+# CI for the harness tool's own repository (the tool folder at the repository root).
+# Builds, runs the unit and acceptance suites on Node 20 and 22 with agent sessions
+# off (what a runner cannot reach is skipped with the reason), checks the npm
+# package contents, and runs the publish check (this machine's paths; add
+# `--denylist <file>` where a private token list exists).
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    env:
+      HARNESS_SKIP_CLAUDE: '1'
+      HARNESS_SAFETY_BEHAVIOUR: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: unit tests
+        run: npm run test:quick
+      - name: acceptance tests
+        run: npm run test:acceptance
+      - name: publish check
+        run: node scripts/check-public.js

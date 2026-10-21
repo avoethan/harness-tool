@@ -1,0 +1,29 @@
+# Case of folder names that hold source files.
+id: naming.dir-case
+engine: path
+family: naming
+title: Folder-name case
+site: a folder (below the repository root) that holds at least one scanned source file
+conforming: its name uses the dominant case
+polarity: either
+overlapping: true
+params: { target: dirname }
+files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs']
+check: { type: regex }
+variants:
+  - name: kebab
+    pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    statement: 'Folder names are kebab-case (order-items/).'
+    fixText: 'Name the folder in kebab-case.'
+  - name: camel
+    pattern: '^[a-z][a-zA-Z0-9]*$'
+    statement: 'Folder names are camelCase (orderItems/).'
+    fixText: 'Name the folder in camelCase.'
+  - name: pascal
+    pattern: '^[A-Z][a-zA-Z0-9]*$'
+    statement: 'Folder names are PascalCase (OrderItems/).'
+    fixText: 'Name the folder in PascalCase.'
+  - name: snake
+    pattern: '^[a-z0-9]+(?:_[a-z0-9]+)*$'
+    statement: 'Folder names are snake_case (order_items/).'
+    fixText: 'Name the folder in snake_case.'

@@ -1,0 +1,12 @@
+id: tests.case-style/it
+valid:
+  - "test('works', () => {});"
+  - 'it.each(cases);'
+invalid:
+  - "it('works', () => {});"
+---
+id: tests.case-style/test
+valid:
+  - "it('works', () => {});"
+invalid:
+  - "test('works', async () => {});"

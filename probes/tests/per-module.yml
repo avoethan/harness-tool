@@ -1,0 +1,21 @@
+# Every source module has a unit test.
+# Built in (src/discover/builtins.ts: tests-per-module). Entry points and
+# adapters are exempt: index, main, server, app, cli, types, *.d.ts, plus any
+# module name that is untested in every package where it occurs and occurs in
+# at least two packages (for example db.ts). The exemptions are printed in
+# the statement.
+id: tests.per-module
+engine: builtin
+builtin: tests-per-module
+family: tests
+title: A unit test per module
+site: a source module under src/ (outside the exemptions)
+conforming: a test for it exists (mirrored path, colocated, or __tests__)
+polarity: fixed
+check: { type: regex }
+variants:
+  - name: tested
+    statement: 'Every module under src/ has a unit test at {TESTROOT}/<path>.{SUFFIX}.ts, except entry points and adapters ({EXEMPT}).'
+    fixText: 'Add {TESTROOT}/<path>.{SUFFIX}.ts for the new module, mirroring its path under src/.'
+    prose: ['every (src )?module has a (unit )?test', 'each module .{0,20}test', 'add a test for (every|each|new) (module|file)']
+  - name: untested

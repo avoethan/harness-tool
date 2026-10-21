@@ -1,0 +1,49 @@
+# Case of function names (declarations).
+id: naming.function-case/camel
+language: TypeScript
+rule:
+  kind: function_declaration
+  has: { field: name, regex: '^[a-z][a-zA-Z0-9]*$' }
+metadata:
+  harness:
+    probe: naming.function-case
+    family: naming
+    title: Function-name case
+    site: a function declaration
+    conforming: its name uses the dominant case
+    polarity: either
+    overlapping: true
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: camel
+    default: true
+    statement: 'Function names are camelCase (loadOrder).'
+    fixText: 'Rename the function to camelCase and update its callers.'
+---
+id: naming.function-case/pascal
+language: TypeScript
+rule:
+  kind: function_declaration
+  has: { field: name, regex: '^[A-Z][a-zA-Z0-9]*$' }
+  # A PascalCase function that renders markup (JSX `</...>` or `/>`) is a component, named by the
+  # component convention, not a function-naming site (in a React codebase components outnumber functions).
+  not:
+    has: { field: body, regex: '</|/>' }
+metadata:
+  harness:
+    probe: naming.function-case
+    variant: pascal
+    statement: 'Function names are PascalCase (LoadOrder).'
+    fixText: 'Rename the function to PascalCase and update its callers.'
+---
+id: naming.function-case/snake
+language: TypeScript
+rule:
+  kind: function_declaration
+  has: { field: name, regex: '^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$' }
+metadata:
+  harness:
+    probe: naming.function-case
+    variant: snake
+    statement: 'Function names are snake_case (load_order).'
+    fixText: 'Rename the function to snake_case and update its callers.'

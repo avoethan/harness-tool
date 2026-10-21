@@ -1,0 +1,15 @@
+id: lint.eqeqeq/strict
+valid:
+  - 'if (a == b) {}'
+  - 'const c = a + b;'
+invalid:
+  - 'if (a === b) {}'
+  - 'const ok = status !== "paid";'
+---
+id: lint.eqeqeq/loose
+valid:
+  - 'if (a === b) {}'
+  - 'x = a <= b;'
+invalid:
+  - 'if (order.status == "paid") {}'
+  - 'while (x != null) {}'

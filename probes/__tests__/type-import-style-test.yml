@@ -1,0 +1,13 @@
+id: imports.type-import-style/separate
+valid:
+  - "import { type A, b } from './a';"
+  - "import { a } from './a';"
+invalid:
+  - "import type { NextFunction, Request } from 'express';"
+---
+id: imports.type-import-style/inline
+valid:
+  - "import type { A } from './a';"
+  - "import { a } from './a';"
+invalid:
+  - "import { type A, b } from './a';"

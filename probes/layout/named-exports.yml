@@ -1,0 +1,38 @@
+# Named exports versus default exports (tool configuration files excluded:
+# tools such as vitest and eslint require a default export there).
+id: layout.named-exports/named
+language: TypeScript
+rule:
+  kind: export_statement
+  not: { regex: '^export\s+default\b' }
+  any:
+    - has: { field: declaration, regex: '\S' }
+    - has: { kind: export_clause }
+metadata:
+  harness:
+    probe: layout.named-exports
+    family: layout
+    title: Named exports
+    site: an export statement in a source module (tool config files excluded)
+    conforming: it follows the dominant style (named or default)
+    polarity: either
+    languages: [TypeScript, Tsx, JavaScript]
+    exclude: ['**/*.config.*', '**/*rc.*', '**/*.d.ts', '**/*.stories.*']
+    check: { type: ast-grep }
+    variant: named
+    statement: 'Modules use named exports; no default exports.'
+    fixText: 'Export the value by name (`export function x` / `export const x`) and import it with braces.'
+    prose: ['named exports?', 'no default exports?']
+---
+id: layout.named-exports/default
+language: TypeScript
+rule:
+  kind: export_statement
+  regex: '^export\s+default\b'
+metadata:
+  harness:
+    probe: layout.named-exports
+    variant: default
+    statement: 'Each module has a default export.'
+    fixText: 'Export the main value as the default export.'
+    prose: ['default exports?']

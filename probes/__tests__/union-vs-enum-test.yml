@@ -1,0 +1,14 @@
+id: types.union-vs-enum/union
+valid:
+  - 'enum Status { Paid }'
+  - 'type A = Order | Shipment;'
+  - 'type B = string | null;'
+invalid:
+  - "type Status = 'paid' | 'shipped';"
+  - 'type Level = 1 | 2 | 3;'
+---
+id: types.union-vs-enum/enum
+valid:
+  - "type Status = 'paid' | 'shipped';"
+invalid:
+  - 'enum Status { Paid, Shipped }'

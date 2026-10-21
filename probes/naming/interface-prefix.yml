@@ -1,0 +1,31 @@
+# `I`-prefixed interface names (IOrder) versus plain names (Order).
+id: naming.interface-prefix/plain
+language: TypeScript
+rule:
+  kind: interface_declaration
+  has: { field: name, not: { regex: '^I[A-Z]' } }
+metadata:
+  harness:
+    probe: naming.interface-prefix
+    family: naming
+    title: Interface-name prefix
+    site: an interface declaration
+    conforming: its name follows the dominant prefix style
+    polarity: either
+    check: { type: ast-grep }
+    variant: plain
+    default: true
+    statement: 'Interface names carry no I prefix (Order, not IOrder).'
+    fixText: 'Drop the I prefix from the interface name.'
+---
+id: naming.interface-prefix/prefixed
+language: TypeScript
+rule:
+  kind: interface_declaration
+  has: { field: name, regex: '^I[A-Z]' }
+metadata:
+  harness:
+    probe: naming.interface-prefix
+    variant: prefixed
+    statement: 'Interface names start with I (IOrder).'
+    fixText: 'Prefix the interface name with I.'

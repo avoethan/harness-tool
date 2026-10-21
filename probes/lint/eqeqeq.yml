@@ -1,0 +1,35 @@
+# Strict versus loose equality.
+id: lint.eqeqeq/strict
+language: TypeScript
+rule:
+  kind: binary_expression
+  has:
+    field: operator
+    regex: '^(===|!==)$'
+metadata:
+  harness:
+    probe: lint.eqeqeq
+    family: lint
+    title: Strict equality
+    site: an equality comparison (==, !=, ===, !==)
+    conforming: the comparison uses === or !==
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    declaredBy: { eslint: [eqeqeq] }
+    check: { type: eslint, ref: eqeqeq }
+    variant: strict
+    statement: Compare with === and !==, never == or !=.
+    fixText: Replace == with === and != with !==; to accept null and undefined together write `x === null || x === undefined`.
+    prose: ['===', 'strict equality', 'eqeqeq']
+---
+id: lint.eqeqeq/loose
+language: TypeScript
+rule:
+  kind: binary_expression
+  has:
+    field: operator
+    regex: '^(==|!=)$'
+metadata:
+  harness:
+    probe: lint.eqeqeq
+    variant: loose

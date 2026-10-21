@@ -1,0 +1,66 @@
+# Route handlers registered through a wrapper (asyncHandler(...)) or inline.
+# A site is a router/app registration with a path string whose last argument
+# is a wrapper call or an inline async function; sync handlers and handler
+# references are not sites (they say nothing about the wrapper rule).
+id: layout.route-handlers-wrapped/wrapped
+language: TypeScript
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '(?i)(router|app|api|server)$' }
+          - has: { field: property, regex: '^(get|post|put|patch|delete|all|options|head)$' }
+    - has:
+        field: arguments
+        all:
+          - has: { nthChild: 1, any: [ { kind: string }, { kind: template_string } ] }
+          - has:
+              nthChild: { position: 1, reverse: true }
+              kind: call_expression
+              has: { field: function, kind: identifier, pattern: $WRAPPER }
+metadata:
+  harness:
+    probe: layout.route-handlers-wrapped
+    family: layout
+    title: Route handlers wrapped
+    site: a router/app .get/.post/.put/.patch/.delete registration with a path whose handler is a wrapper call or an inline async function
+    conforming: the handler is passed through the dominant wrapper ({WRAPPER}(...))
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    exclude: ['**/*.test.*', '**/*.spec.*', '**/*.e2e.*', '**/test/**', '**/tests/**', '**/__tests__/**', '**/spec/**', '**/e2e/**', '**/*-tests/**', '**/example/**', '**/examples/**', '**/docs/**', '**/demo/**', '**/demos/**', '**/fixtures/**', '**/__fixtures__/**', '**/benchmarks/**']
+    capture: WRAPPER
+    check: { type: ast-grep }
+    variant: wrapped
+    statement: 'Every route handler registered with router/app .get/.post/.put/.patch/.delete is wrapped in {WRAPPER}(...).'
+    fixText: 'Pass the handler through the wrapper: router.get(''/x'', {WRAPPER}(async (req, res) => { ... })).'
+    prose: ['asyncHandler', 'wrap(ped)? (every|each|all|the) (route )?handlers?', 'handlers? (are|is) wrapped']
+---
+id: layout.route-handlers-wrapped/inline-async
+language: TypeScript
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '(?i)(router|app|api|server)$' }
+          - has: { field: property, regex: '^(get|post|put|patch|delete|all|options|head)$' }
+    - has:
+        field: arguments
+        all:
+          - has: { nthChild: 1, any: [ { kind: string }, { kind: template_string } ] }
+          - has:
+              nthChild: { position: 1, reverse: true }
+              any:
+                - kind: arrow_function
+                  regex: '^async\b'
+                - kind: function_expression
+                  regex: '^async\b'
+metadata:
+  harness:
+    probe: layout.route-handlers-wrapped
+    variant: inline-async

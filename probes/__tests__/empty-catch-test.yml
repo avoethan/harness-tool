@@ -1,0 +1,14 @@
+id: errors.empty-catch/handled
+valid:
+  - 'try { a(); } catch (e) {}'
+invalid:
+  - 'try { a(); } catch (e) { log(e); }'
+  - 'try { a(); } catch { /* best effort */ }'
+---
+id: errors.empty-catch/empty
+valid:
+  - 'try { a(); } catch (e) { log(e); }'
+  - 'try { a(); } catch { /* best effort */ }'
+invalid:
+  - 'try { a(); } catch (e) {}'
+  - "try { a(); } catch {\n}"

@@ -1,0 +1,11 @@
+id: format.final-newline/present
+valid:
+  - "export {}"
+invalid:
+  - "export {}\n"
+---
+id: format.final-newline/absent
+valid:
+  - "export {}\n"
+invalid:
+  - "export {}"

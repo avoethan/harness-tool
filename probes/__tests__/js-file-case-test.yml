@@ -1,0 +1,24 @@
+id: naming.js-file-case/kebab
+valid:
+  - lib/orderCsv.js
+invalid:
+  - lib/order-csv.js
+  - eslint.config.mjs
+---
+id: naming.js-file-case/camel
+valid:
+  - lib/order-csv.js
+invalid:
+  - lib/orderCsv.js
+---
+id: naming.js-file-case/pascal
+valid:
+  - lib/orderCsv.js
+invalid:
+  - lib/OrderCsv.jsx
+---
+id: naming.js-file-case/snake
+valid:
+  - lib/order-csv.js
+invalid:
+  - lib/order_csv.cjs

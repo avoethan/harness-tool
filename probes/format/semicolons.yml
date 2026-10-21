@@ -1,0 +1,45 @@
+# Statement-terminating semicolons.
+id: format.semicolons/always
+language: TypeScript
+rule:
+  any:
+    - kind: expression_statement
+    - kind: lexical_declaration
+    - kind: return_statement
+    - kind: import_statement
+    - kind: throw_statement
+  regex: ';$'
+metadata:
+  harness:
+    probe: format.semicolons
+    family: format
+    title: Semicolons
+    site: an expression, declaration, return, import or throw statement
+    conforming: it ends with the dominant style (semicolon or none)
+    polarity: either
+    formatterOwned: true
+    languages: [TypeScript, Tsx, JavaScript]
+    declaredBy:
+      prettier: { semi: { 'true': always, 'false': never, default: always } }
+      biome: { javascript.formatter.semicolons: { always: always, asNeeded: never } }
+    check: { type: config, ref: formatter }
+    variant: always
+    statement: 'Statements end with semicolons.'
+    fixText: "Add the semicolon; the repo's formatter adds them."
+---
+id: format.semicolons/never
+language: TypeScript
+rule:
+  any:
+    - kind: expression_statement
+    - kind: lexical_declaration
+    - kind: return_statement
+    - kind: import_statement
+    - kind: throw_statement
+  not: { regex: ';$' }
+metadata:
+  harness:
+    probe: format.semicolons
+    variant: never
+    statement: 'Statements do not end with semicolons (rely on ASI).'
+    fixText: "Remove the semicolon; the repo's formatter removes them."

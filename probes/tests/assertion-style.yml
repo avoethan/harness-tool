@@ -1,0 +1,34 @@
+# expect(...) or assert.* in tests (informational).
+id: tests.assertion-style/expect
+language: TypeScript
+rule:
+  kind: call_expression
+  has: { field: function, regex: '^expect$' }
+metadata:
+  harness:
+    probe: tests.assertion-style
+    family: tests
+    title: Assertion style
+    site: an assertion call (expect(...) or assert.*(...))
+    conforming: it uses the dominant style
+    polarity: either
+    record: false
+    languages: [TypeScript, Tsx, JavaScript]
+    files: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**', '**/test/**', '**/tests/**']
+    check: { type: ast-grep }
+    variant: expect
+---
+id: tests.assertion-style/assert
+language: TypeScript
+rule:
+  kind: call_expression
+  any:
+    - has: { field: function, regex: '^assert$' }
+    - has:
+        field: function
+        kind: member_expression
+        has: { field: object, regex: '^assert$' }
+metadata:
+  harness:
+    probe: tests.assertion-style
+    variant: assert

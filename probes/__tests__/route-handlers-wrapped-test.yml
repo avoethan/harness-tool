@@ -1,0 +1,15 @@
+id: layout.route-handlers-wrapped/wrapped
+valid:
+  - "router.get('/x', async (req, res) => { res.json({}); });"
+  - "router.get('/x', (req, res) => { res.json({}); });"
+invalid:
+  - "productsRouter.get('/', asyncHandler(async (req, res) => { res.json({}); }));"
+  - "app.post('/orders', auth, asyncHandler(async (req, res) => {}));"
+---
+id: layout.route-handlers-wrapped/inline-async
+valid:
+  - "router.get('/x', asyncHandler(async (req, res) => {}));"
+  - "router.get('/x', (req, res) => {});"
+invalid:
+  - "router.get('/x', async (req, res) => { res.json({}); });"
+  - "app.delete('/x/:id', async function (req, res) {});"

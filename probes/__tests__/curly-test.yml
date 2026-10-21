@@ -1,0 +1,16 @@
+id: lint.curly/braced
+valid:
+  - 'if (a) b();'
+  - 'for (const x of xs) go(x);'
+invalid:
+  - 'if (a) { b(); }'
+  - 'while (x) { x--; }'
+---
+id: lint.curly/unbraced
+valid:
+  - 'if (a) { b(); } else if (c) { d(); }'
+  - 'for (let i = 0; i < 3; i++) { go(i); }'
+invalid:
+  - 'if (a) return;'
+  - 'if (a) { b(); } else c();'
+  - 'for (const x of xs) go(x);'

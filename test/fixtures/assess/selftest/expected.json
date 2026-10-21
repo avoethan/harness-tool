@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "about": "Frozen expectation for the assess precision/recall self-test, written by hand from the fixture design before assess was run on it. Paths are relative to the selftest folder; '~/' means the selftest-home folder. Lines not listed are KEEP. Findings are scored by (check, file) over warn and high findings plus R25 and R26 at any severity.",
+  "lines": {
+    "AGENTS.md": {
+      "9": "FIX",
+      "13": "FIX",
+      "14": "FIX",
+      "15": "FIX",
+      "16": "SPLIT",
+      "18": "CONVERT",
+      "20": "QUARANTINE",
+      "22": "TRIM",
+      "23": "TRIM",
+      "24": "TRIM",
+      "25": "TRIM",
+      "26": "TRIM",
+      "27": "TRIM",
+      "28": "TRIM",
+      "29": "TRIM",
+      "30": "TRIM",
+      "31": "TRIM"
+    },
+    "CLAUDE.md": {
+      "3": "FIX"
+    },
+    "AGENTS.local.md": {
+      "3": "QUARANTINE"
+    },
+    ".claude/rules/api.md": {
+      "9": "FIX"
+    },
+    ".claude/skills/deploy-preview/SKILL.md": {},
+    ".claude/skills/lintFixer/SKILL.md": {
+      "2": "FIX"
+    },
+    ".devin/rules/style.md": {
+      "5": "QUARANTINE"
+    },
+    "~/.claude/CLAUDE.md": {
+      "4": "FIX",
+      "5": "CONVERT"
+    }
+  },
+  "findings": [
+    {
+      "check": "R04",
+      "file": "AGENTS.md",
+      "defect": "stale command (npm run dev)"
+    },
+    {
+      "check": "R29",
+      "file": "AGENTS.md",
+      "defect": "semicolons rule against Prettier semi: false"
+    },
+    {
+      "check": "R30",
+      "file": "AGENTS.md",
+      "defect": "single quotes here, double quotes in the user file"
+    },
+    {
+      "check": "R05",
+      "file": "AGENTS.md",
+      "defect": "stale path src/log.js"
+    },
+    {
+      "check": "R25",
+      "file": "AGENTS.md",
+      "defect": "instructions a check could enforce"
+    },
+    {
+      "check": "R13",
+      "file": "AGENTS.md",
+      "defect": "autonomy escalation (don't ask for confirmation)"
+    },
+    {
+      "check": "R26",
+      "file": "AGENTS.md",
+      "defect": "derivable project structure section"
+    },
+    {
+      "check": "R22",
+      "file": "CLAUDE.md",
+      "defect": "broken @import"
+    },
+    {
+      "check": "R05",
+      "file": ".claude/rules/api.md",
+      "defect": "stale path src/routes/schemas.js"
+    },
+    {
+      "check": "R28",
+      "file": ".claude/skills/deploy-preview/SKILL.md",
+      "defect": "model-invocable skill that pushes"
+    },
+    {
+      "check": "R18",
+      "file": ".claude/skills/lintFixer/SKILL.md",
+      "defect": "bad skill name"
+    },
+    {
+      "check": "R10",
+      "file": ".devin/rules/style.md",
+      "defect": "hidden zero-width joiner"
+    },
+    {
+      "check": "R11",
+      "file": "AGENTS.local.md",
+      "defect": "HTML comment with instruction words"
+    },
+    {
+      "check": "R29",
+      "file": "~/.claude/CLAUDE.md",
+      "defect": "double quotes against Prettier singleQuote: true"
+    },
+    {
+      "check": "R30",
+      "file": "~/.claude/CLAUDE.md",
+      "defect": "double quotes here, single quotes in AGENTS.md"
+    },
+    {
+      "check": "R25",
+      "file": "~/.claude/CLAUDE.md",
+      "defect": "run lint before push could be a hook"
+    }
+  ]
+}

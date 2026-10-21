@@ -1,0 +1,53 @@
+# JSON responses: an object literal keyed by resource (res.json({ product }))
+# or a bare value (res.json(product), res.json(rows)).
+id: api.json-envelope/object
+language: TypeScript
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: property, regex: '^json$' }
+          - has: { field: object, regex: '(?i)^(res|response|reply|ctx)\b' }
+    - has:
+        field: arguments
+        all:
+          - has: { nthChild: 1, kind: object }
+          - not: { has: { nthChild: 2 } }
+metadata:
+  harness:
+    probe: api.json-envelope
+    family: api
+    title: JSON response envelope
+    site: a res.json(...) call with one argument
+    conforming: the payload is an object literal that names its contents (res.json({ product }))
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: object
+    statement: 'JSON responses are objects that name their contents (res.json({ product }), res.json({ orders })), never a bare value or array.'
+    fixText: 'Wrap the payload in an object keyed by the resource: res.json({ order }) rather than res.json(order).'
+    prose: ['envelope', 'keyed by', 'response (shape|body) is an object']
+---
+id: api.json-envelope/bare
+language: TypeScript
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: property, regex: '^json$' }
+          - has: { field: object, regex: '(?i)^(res|response|reply|ctx)\b' }
+    - has:
+        field: arguments
+        all:
+          - has: { nthChild: 1, any: [ { kind: identifier }, { kind: array }, { kind: member_expression }, { kind: call_expression }, { kind: await_expression } ] }
+          - not: { has: { nthChild: 2 } }
+metadata:
+  harness:
+    probe: api.json-envelope
+    variant: bare

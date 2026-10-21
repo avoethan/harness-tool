@@ -1,0 +1,15 @@
+id: naming.constant-case/upper
+valid:
+  - 'const maxRetries = 3;'
+  - 'function f() { const MAX = 3; }'
+invalid:
+  - 'const MAX_RETRIES = 3;'
+  - 'export const DEFAULT_REGION = "eu-west";'
+---
+id: naming.constant-case/camel
+valid:
+  - 'const MAX_RETRIES = 3;'
+  - 'const pool = createPool();'
+invalid:
+  - 'const maxRetries = 3;'
+  - 'export const defaultRegion = "eu-west";'

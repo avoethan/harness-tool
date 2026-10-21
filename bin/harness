@@ -1,0 +1,10 @@
+#!/bin/sh
+# Launcher for POSIX shells. Resolves the real location of this file so it works through symlinks.
+self="$0"
+while [ -L "$self" ]; do
+  dir="$(cd "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$dir/$self" ;; esac
+done
+root="$(cd "$(dirname "$self")/.." && pwd)"
+exec node "$root/dist/src/cli.js" "$@"

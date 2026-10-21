@@ -1,0 +1,13 @@
+id: naming.interface-prefix/plain
+valid:
+  - 'interface IOrder { id: number }'
+invalid:
+  - 'interface Order { id: number }'
+  - 'interface Item { id: number }'
+---
+id: naming.interface-prefix/prefixed
+valid:
+  - 'interface Order { id: number }'
+  - 'interface Item { id: number }'
+invalid:
+  - 'interface IOrder { id: number }'

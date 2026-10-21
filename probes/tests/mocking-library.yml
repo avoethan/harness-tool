@@ -1,0 +1,53 @@
+# Which mocking API the tests use (informational: feeds the report and the judgment bundle).
+id: tests.mocking-library/vitest
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: object, regex: '^vi$' }
+      - has: { field: property, regex: '^(mock|fn|spyOn|mocked|stubGlobal|hoisted)$' }
+metadata:
+  harness:
+    probe: tests.mocking-library
+    family: tests
+    title: Mocking library
+    site: a mocking call (vi.*, jest.*, sinon.*)
+    conforming: it uses the dominant library
+    polarity: either
+    record: false
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: vitest
+---
+id: tests.mocking-library/jest
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: object, regex: '^jest$' }
+      - has: { field: property, regex: '^(mock|fn|spyOn|mocked|doMock)$' }
+metadata:
+  harness:
+    probe: tests.mocking-library
+    variant: jest
+---
+id: tests.mocking-library/sinon
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: object, regex: '^sinon$' }
+      - has: { field: property, regex: '^(stub|spy|mock|fake|createSandbox)$' }
+metadata:
+  harness:
+    probe: tests.mocking-library
+    variant: sinon

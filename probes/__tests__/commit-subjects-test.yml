@@ -1,0 +1,26 @@
+id: naming.commit-subjects/conventional
+valid:
+  - Fixed the thing
+  - 'Revert "feat(lib): retry helper"'
+  - 'ABC-12: add export'
+invalid:
+  - 'feat(products): list endpoint'
+  - 'revert: feat(lib): retry helper'
+  - 'style: lint fixes'
+  - 'fix!: drop node 18'
+---
+id: naming.commit-subjects/ticket
+valid:
+  - 'feat: x'
+invalid:
+  - 'ABC-12: add export'
+  - '[OPS-7] rotate keys'
+---
+id: naming.commit-subjects/other
+valid:
+  - 'feat: x'
+  - 'ABC-12: add export'
+invalid:
+  - Fixed the thing
+  - 'Revert "feat(lib): retry helper"'
+  - 'Feat: capitalised type'

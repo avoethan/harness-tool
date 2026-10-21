@@ -1,0 +1,18 @@
+# In a workspace (monorepo), code in one package imports another package by
+# its package name, not by a relative path into the other package's folder.
+# Built in (src/discover/builtins.ts: workspace-imports).
+id: imports.workspace-packages
+engine: builtin
+builtin: workspace-imports
+family: imports
+title: Cross-package imports by package name
+site: an import from one workspace package into another
+conforming: it names the package (@scope/core), not a relative path into the other package
+polarity: fixed
+check: { type: regex }
+variants:
+  - name: by-name
+    statement: 'Code in one workspace package imports another by its package name ({EXAMPLE}), never by a relative path into the other package.'
+    fixText: 'Import from the package name ({EXAMPLE}) and export what you need from its entry point.'
+    prose: ['import (it )?from `?@', 'by (its )?package name']
+  - name: relative

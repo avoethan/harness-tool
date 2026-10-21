@@ -1,0 +1,24 @@
+id: naming.dir-case/kebab
+valid:
+  - orderItems
+invalid:
+  - order-items
+  - lib
+---
+id: naming.dir-case/camel
+valid:
+  - order-items
+invalid:
+  - orderItems
+---
+id: naming.dir-case/pascal
+valid:
+  - orderItems
+invalid:
+  - OrderItems
+---
+id: naming.dir-case/snake
+valid:
+  - order-items
+invalid:
+  - order_items

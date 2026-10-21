@@ -1,0 +1,17 @@
+id: validation.schema-library/zod
+valid:
+  - 'Joi.object({});'
+invalid:
+  - 'const S = z.object({ id: z.number() });'
+---
+id: validation.schema-library/joi
+valid:
+  - 'z.object({});'
+invalid:
+  - 'Joi.object({ id: Joi.number() });'
+---
+id: validation.schema-library/yup
+valid:
+  - 'z.object({});'
+invalid:
+  - 'yup.object({});'

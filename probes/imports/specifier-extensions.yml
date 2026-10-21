@@ -1,0 +1,34 @@
+# Relative import specifiers with a file extension (./x.js) or without (./x).
+id: imports.specifier-extensions/extensionless
+language: TypeScript
+rule:
+  kind: import_statement
+  has: { field: source, regex: '^[''"]\.{1,2}/' }
+  not: { has: { field: source, regex: '\.(js|mjs|cjs|ts|mts|cts|tsx|jsx|json)[''"]$' } }
+metadata:
+  harness:
+    probe: imports.specifier-extensions
+    family: imports
+    title: Extensions in relative imports
+    site: an import with a relative specifier (./ or ../)
+    conforming: it follows the dominant style (with or without a file extension)
+    polarity: either
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: extensionless
+    default: true
+    statement: 'Relative imports omit the file extension (./money, not ./money.js).'
+    fixText: "Drop the extension from the specifier: from './money'."
+---
+id: imports.specifier-extensions/with-extension
+language: TypeScript
+rule:
+  kind: import_statement
+  has: { field: source, regex: '^[''"]\.{1,2}/.*\.(js|mjs|cjs|ts|mts|cts|tsx|jsx)[''"]$' }
+metadata:
+  harness:
+    probe: imports.specifier-extensions
+    variant: with-extension
+    statement: 'Relative imports name the file extension (./money.js), as ESM resolution requires.'
+    fixText: "Add the extension to the specifier: from './money.js'."
+    prose: ['\.js extension', 'file extensions? in imports']

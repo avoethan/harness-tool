@@ -1,0 +1,48 @@
+{
+  "name": "agent-harness",
+  "version": "0.2.0",
+  "description": "Reads a codebase and its agent setup, works out the real standards with evidence, and configures a harness so coding agents (Devin desktop, Claude Code, Codex) follow those standards, prove their work, and need a human rarely.",
+  "license": "MIT",
+  "private": false,
+  "type": "commonjs",
+  "bin": {
+    "harness": "bin/harness"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "test": "npm run build && node dist/test/run.js all",
+    "test:unit": "npm run build && node dist/test/run.js unit",
+    "test:quick": "node dist/test/run.js unit",
+    "test:acceptance": "node dist/test/run.js acceptance",
+    "test:behaviour": "node dist/test/run.js behaviour",
+    "test:safety": "node dist/test/run.js safety",
+    "check:public": "node scripts/check-public.js",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "optionalDependencies": {
+    "@ast-grep/cli": "^0.51.0"
+  },
+  "files": [
+    "bin",
+    "dist/src",
+    "templates",
+    "probes",
+    "selfcheck",
+    "scripts",
+    "docs",
+    "src/**/README.md",
+    "README.md",
+    "SAFETY.md",
+    "ARCHITECTURE.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ]
+}

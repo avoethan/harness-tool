@@ -1,0 +1,30 @@
+# Where test files live relative to the code they test.
+# Built in (src/discover/builtins.ts: test-placement): a test file is
+# classified by its folder and by whether a source module with the same
+# relative path exists under src/.
+id: tests.placement
+engine: builtin
+builtin: test-placement
+family: tests
+title: Test placement
+site: a test file (*.test.* / *.spec.* or a file under __tests__/)
+conforming: it is placed the dominant way
+polarity: either
+declaredBy: { testRunner: true }
+check: { type: regex }
+variants:
+  - name: mirror
+    statement: 'Unit tests live at {TESTROOT}/<path>.{SUFFIX}.ts and mirror src/<path>.ts (src/lib/money.ts is tested by {TESTROOT}/lib/money.{SUFFIX}.ts).{E2E}'
+    fixText: 'Put the test at {TESTROOT}/<same path as the module under src/>.{SUFFIX}.ts, not next to the module and not under another name.'
+    prose: ['mirror(s|ing)? the `?src', 'test/unit', 'tests? (live|go|belong) (under|in)']
+  - name: separate
+    statement: 'Tests live under {TESTROOT}/ (not next to the code).'
+    fixText: 'Put the test under {TESTROOT}/.'
+  - name: colocated
+    statement: 'Tests sit next to the module they test (money.ts and money.{SUFFIX}.ts in the same folder).'
+    fixText: 'Put the test file next to the module it tests.'
+    prose: ['next to the (module|file|code)', 'co-?located']
+  - name: dunder
+    statement: 'Tests live in __tests__/ folders beside the code they test.'
+    fixText: 'Put the test in the __tests__/ folder beside the module.'
+    prose: ['__tests__']

@@ -1,0 +1,26 @@
+# Top-level folders under src/ (informational: the folder histogram feeds the
+# report and the judgment bundle; it never becomes a standard on its own).
+id: layout.source-folders
+engine: path
+family: layout
+title: Folders under src/
+site: a source file under a src/ folder
+conforming: informational histogram of the first folder below src/
+polarity: either
+record: false
+params: { target: src-folder }
+files: ['**/src/**/*.ts', '**/src/**/*.tsx', '**/src/**/*.js', '**/src/**/*.jsx']
+check: { type: regex }
+variants:
+  - name: routes
+    pattern: '^(routes?|controllers?|handlers?|api|endpoints?)$'
+  - name: services
+    pattern: '^(services?|domain|use-?cases?|core)$'
+  - name: data
+    pattern: '^(repos?|repositories|db|data|dal|models?|entities|store)$'
+  - name: lib
+    pattern: '^(lib|utils?|helpers?|common|shared)$'
+  - name: clients
+    pattern: '^(clients?|integrations?|adapters?|gateways?)$'
+  - name: root
+    pattern: '^$'

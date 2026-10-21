@@ -1,0 +1,11 @@
+{
+  "read_config_from": { "claude": true, "cursor": true },
+  "permissions": {
+    "allow": ["Read(**)"],
+    "deny": ["Exec(git push --force)"],
+    "ask": ["Exec(git push)"]
+  },
+  "hooks": {
+    "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "node /opt/tools/session-note.js" }] }]
+  }
+}

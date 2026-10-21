@@ -1,0 +1,12 @@
+id: api.error-status-body/error-key
+valid:
+  - "res.status(404).json({ message: 'x' });"
+invalid:
+  - "res.status(404).json({ error: { code: 'not_found', message } });"
+---
+id: api.error-status-body/other
+valid:
+  - "res.status(500).json({ error: 'x' });"
+  - 'res.status(200).json({ ok: true });'
+invalid:
+  - "res.status(400).json({ message: 'bad' });"

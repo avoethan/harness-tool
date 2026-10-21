@@ -1,0 +1,18 @@
+id: lint.no-explicit-any/typed
+valid:
+  - 'const x: any = 1;'
+  - 'const y = z as any;'
+  - 'foo(1);'
+invalid:
+  - 'const x: number = 1;'
+  - 'const y = z as unknown as Order;'
+  - 'const m = new Map<string, number>();'
+---
+id: lint.no-explicit-any/any
+valid:
+  - 'const x: unknown = 1;'
+  - 'function f(a: string): Promise<void> {}'
+invalid:
+  - 'function handle(payload: any) {}'
+  - 'const y = z as any;'
+  - 'const m = new Map<string, any>();'

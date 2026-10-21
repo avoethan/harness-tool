@@ -1,0 +1,10 @@
+# user-level Codex config (synthetic fixture)
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[mcp_servers.docs]
+command = "docs-mcp"
+args = ["--readonly"]
+
+[profiles.fast]
+approval_policy = "on-request"

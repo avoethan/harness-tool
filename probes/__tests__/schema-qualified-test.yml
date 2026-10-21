@@ -1,0 +1,15 @@
+id: sql.schema-qualified/qualified
+valid:
+  - "q('SELECT id FROM orders WHERE id = @id');"
+  - "q('read from disk');"
+invalid:
+  - "q('SELECT id FROM dbo.orders WHERE id = @id');"
+  - 'q(`SELECT o.id FROM dbo.orders o LEFT JOIN dbo.shipments s ON s.order_id = o.id`);'
+---
+id: sql.schema-qualified/unqualified
+valid:
+  - "q('SELECT id FROM dbo.orders');"
+  - "say('come from home');"
+invalid:
+  - "q('SELECT id FROM orders WHERE id = @id');"
+  - "q('UPDATE orders SET status = @s');"

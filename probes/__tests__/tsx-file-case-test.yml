@@ -1,0 +1,17 @@
+id: naming.tsx-file-case/pascal
+valid:
+  - src/components/order-table.tsx
+invalid:
+  - src/components/OrderTable.tsx
+---
+id: naming.tsx-file-case/kebab
+valid:
+  - src/components/OrderTable.tsx
+invalid:
+  - src/components/order-table.tsx
+---
+id: naming.tsx-file-case/camel
+valid:
+  - src/components/OrderTable.tsx
+invalid:
+  - src/components/orderTable.tsx

@@ -1,0 +1,17 @@
+id: errors.error-construction/helper
+valid:
+  - "throw new Error('x');"
+invalid:
+  - 'throw notFound(`Product ${id}`);'
+---
+id: errors.error-construction/custom-class
+valid:
+  - "throw new Error('x');"
+invalid:
+  - "throw new HttpError(404, 'missing');"
+---
+id: errors.error-construction/plain-error
+valid:
+  - "throw new HttpError(404, 'missing');"
+invalid:
+  - "throw new Error('x');"

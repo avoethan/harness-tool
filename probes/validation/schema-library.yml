@@ -1,0 +1,53 @@
+# Which validation library builds schemas (informational).
+id: validation.schema-library/zod
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: object, regex: '^z$' }
+      - has: { field: property, regex: '^(object|string|number|array|enum|union|literal|boolean)$' }
+metadata:
+  harness:
+    probe: validation.schema-library
+    family: validation
+    title: Validation library
+    site: a schema-building call (z.object, Joi.object, yup.object, ...)
+    conforming: informational (which library)
+    polarity: either
+    record: false
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: zod
+---
+id: validation.schema-library/joi
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: object, regex: '^Joi$' }
+      - has: { field: property, regex: '^(object|string|number|array|alternatives|boolean)$' }
+metadata:
+  harness:
+    probe: validation.schema-library
+    variant: joi
+---
+id: validation.schema-library/yup
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: object, regex: '^(yup|Yup)$' }
+      - has: { field: property, regex: '^(object|string|number|array|mixed|boolean)$' }
+metadata:
+  harness:
+    probe: validation.schema-library
+    variant: yup

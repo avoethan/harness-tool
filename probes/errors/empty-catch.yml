@@ -1,0 +1,28 @@
+# Empty catch blocks swallow errors (reported, never a standard).
+id: errors.empty-catch/handled
+language: TypeScript
+rule:
+  kind: catch_clause
+  not: { has: { field: body, regex: '^\{\s*\}$' } }
+metadata:
+  harness:
+    probe: errors.empty-catch
+    family: errors
+    title: Empty catch blocks
+    site: a catch clause
+    conforming: the block handles, logs or rethrows (or holds a comment explaining why not)
+    hygiene: true
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: handled
+    default: true
+---
+id: errors.empty-catch/empty
+language: TypeScript
+rule:
+  kind: catch_clause
+  has: { field: body, regex: '^\{\s*\}$' }
+metadata:
+  harness:
+    probe: errors.empty-catch
+    variant: empty

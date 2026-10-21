@@ -1,0 +1,7 @@
+{
+  "root": true,
+  "rules": {
+    "eqeqeq": "error",
+    "no-console": "warn"
+  }
+}

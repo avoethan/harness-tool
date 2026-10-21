@@ -1,0 +1,27 @@
+# Tabs or spaces for indentation (per file).
+id: format.indent-style
+engine: content
+family: format
+title: Indentation with tabs or spaces
+site: a source file with at least one indented line
+conforming: its indented lines use the dominant character
+polarity: either
+formatterOwned: true
+params: { unit: file }
+files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', '**/*.mts', '**/*.cts']
+declaredBy:
+  prettier: { useTabs: { 'true': tabs, 'false': spaces, default: spaces } }
+  editorconfig: { indent_style: { tab: tabs, space: spaces } }
+check: { type: config, ref: formatter }
+variants:
+  - name: spaces
+    pattern: '^ +\S'
+    flags: m
+    default: true
+    statement: 'Indent with spaces, not tabs.'
+    fixText: "Re-indent with spaces; the repo's formatter does it."
+  - name: tabs
+    pattern: '^\t+\S'
+    flags: m
+    statement: 'Indent with tabs, not spaces.'
+    fixText: "Re-indent with tabs; the repo's formatter does it."

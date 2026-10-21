@@ -1,0 +1,31 @@
+# Migration file-name scheme.
+id: sql.migration-file-names
+engine: filename
+family: sql
+title: Migration file names
+site: a .sql file in a migrations folder
+conforming: its name follows the dominant scheme
+polarity: either
+files: ['**/migrations/**/*.sql', '**/migration/**/*.sql', '**/db/migrate/**/*.sql', '**/sql/migrations/**/*.sql']
+check: { type: regex }
+variants:
+  - name: seq-kebab
+    pattern: '^\d{3,6}_[a-z0-9]+(?:-[a-z0-9]+)*\.sql$'
+    statement: 'Migration files are named NNNN_kebab-description.sql: a zero-padded sequence number, an underscore, a kebab-case description.'
+    fixText: 'Name the file with the next sequence number and a kebab-case description, for example 0007_add-shipments-notes.sql.'
+    prose: ['NNNN_', '\d{4}_[a-z]', 'name (them|migrations|the file)']
+  - name: seq-snake
+    pattern: '^\d{3,6}_[a-z0-9]+(?:_[a-z0-9]+)+\.sql$'
+    statement: 'Migration files are named NNNN_snake_description.sql.'
+    fixText: 'Name the file with the next sequence number and a snake_case description, for example 0007_add_shipments_notes.sql.'
+  - name: flyway
+    pattern: '^[VRU]\d+(?:[._]\d+)*__\w+\.sql$'
+    statement: 'Migration files follow Flyway naming: V<version>__<description>.sql.'
+    fixText: 'Name the file V<next version>__<description>.sql.'
+    prose: ['flyway']
+  - name: timestamp
+    pattern: '^\d{12,14}[_-][\w-]+\.sql$'
+    statement: 'Migration files start with a UTC timestamp (YYYYMMDDHHMMSS_description.sql).'
+    fixText: 'Name the file with the current UTC timestamp and a description.'
+  - name: other
+    pattern: '^(?!\d{3,6}_[a-z0-9]+(?:[-_][a-z0-9]+)*\.sql$)(?![VRU]\d+(?:[._]\d+)*__\w+\.sql$)(?!\d{12,14}[_-][\w-]+\.sql$)'

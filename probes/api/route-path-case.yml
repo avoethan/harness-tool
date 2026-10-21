@@ -1,0 +1,78 @@
+# Case of multi-word segments in route paths (/order-items vs /orderItems).
+id: api.route-path-case/kebab
+language: TypeScript
+rule:
+  kind: string
+  nthChild: 1
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '(?i)(router|app|api|server)$' }
+          - has: { field: property, regex: '^(get|post|put|patch|delete|all|use)$' }
+  regex: '^.\/[^''"]*[a-z0-9]-[a-z0-9]'
+  not: { regex: '[A-Z_]' }
+metadata:
+  harness:
+    probe: api.route-path-case
+    family: api
+    title: Route path case
+    site: a route path string with a multi-word segment
+    conforming: multi-word segments use the dominant case
+    polarity: either
+    languages: [TypeScript, Tsx, JavaScript]
+    exclude: ['**/*.test.*', '**/*.spec.*', '**/*.e2e.*', '**/test/**', '**/tests/**', '**/__tests__/**', '**/spec/**', '**/e2e/**', '**/*-tests/**', '**/example/**', '**/examples/**', '**/docs/**', '**/demo/**', '**/demos/**', '**/fixtures/**', '**/__fixtures__/**', '**/benchmarks/**']
+    check: { type: ast-grep }
+    variant: kebab
+    statement: 'Route paths use kebab-case segments (/order-items).'
+    fixText: 'Write multi-word path segments in kebab-case: /order-items/:id.'
+---
+id: api.route-path-case/camel
+language: TypeScript
+rule:
+  kind: string
+  nthChild: 1
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '(?i)(router|app|api|server)$' }
+          - has: { field: property, regex: '^(get|post|put|patch|delete|all|use)$' }
+  regex: '^.[^''"]*\/[a-z][a-z0-9]*[A-Z]'
+metadata:
+  harness:
+    probe: api.route-path-case
+    variant: camel
+    statement: 'Route paths use camelCase segments (/orderItems).'
+    fixText: 'Write multi-word path segments in camelCase: /orderItems/:id.'
+---
+id: api.route-path-case/snake
+language: TypeScript
+rule:
+  kind: string
+  nthChild: 1
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '(?i)(router|app|api|server)$' }
+          - has: { field: property, regex: '^(get|post|put|patch|delete|all|use)$' }
+  regex: '^.\/[^''"]*[a-z0-9]_[a-z0-9]'
+metadata:
+  harness:
+    probe: api.route-path-case
+    variant: snake
+    statement: 'Route paths use snake_case segments (/order_items).'
+    fixText: 'Write multi-word path segments in snake_case: /order_items/:id.'

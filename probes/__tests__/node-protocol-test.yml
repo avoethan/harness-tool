@@ -1,0 +1,14 @@
+id: imports.node-protocol/prefixed
+valid:
+  - "import * as path from 'path';"
+invalid:
+  - "import * as path from 'node:path';"
+  - 'import { readFileSync } from "node:fs";'
+---
+id: imports.node-protocol/bare
+valid:
+  - "import * as path from 'node:path';"
+  - "import express from 'express';"
+invalid:
+  - "import * as path from 'path';"
+  - "import { promises } from 'fs/promises';"

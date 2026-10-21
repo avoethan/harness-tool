@@ -1,0 +1,12 @@
+id: async.floating-promise/floating
+valid:
+  - "async function save() {}\nasync function main() { await save(); }"
+  - "function sync() {}\nfunction main() { sync(); }"
+invalid:
+  - "async function save() {}\nfunction main() { save(); }"
+---
+id: async.floating-promise/awaited
+valid:
+  - "async function save() {}\nfunction main() { save(); }"
+invalid:
+  - "async function save() {}\nasync function main() { await save(); }"

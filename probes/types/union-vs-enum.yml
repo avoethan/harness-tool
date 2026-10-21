@@ -1,0 +1,33 @@
+# Fixed sets of values: string-literal unions or enums.
+id: types.union-vs-enum/union
+language: TypeScript
+rule:
+  kind: type_alias_declaration
+  has:
+    field: value
+    kind: union_type
+    not: { has: { stopBy: end, any: [ { kind: type_identifier }, { kind: predefined_type }, { kind: object_type } ] } }
+metadata:
+  harness:
+    probe: types.union-vs-enum
+    family: types
+    title: Literal unions or enums
+    site: an enum declaration, or a type alias that is a union of literal types
+    conforming: it uses the dominant form
+    polarity: either
+    check: { type: ast-grep }
+    variant: union
+    statement: "Fixed sets of values are string-literal unions (type Status = 'paid' | 'shipped'), not enums."
+    fixText: "Declare the set as a union of string literals: type Status = 'paid' | 'shipped';"
+    prose: ['no enums?', 'literal unions?', 'avoid enums?']
+---
+id: types.union-vs-enum/enum
+language: TypeScript
+rule:
+  kind: enum_declaration
+metadata:
+  harness:
+    probe: types.union-vs-enum
+    variant: enum
+    statement: 'Fixed sets of values are enums, not string-literal unions.'
+    fixText: 'Declare the set as an enum.'

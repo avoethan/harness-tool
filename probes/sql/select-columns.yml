@@ -1,0 +1,36 @@
+# SELECT lists its columns, or uses *.
+id: sql.select-columns/explicit
+language: TypeScript
+rule:
+  any:
+    - kind: string
+    - kind: template_string
+  regex: '(?i)\bselect\s[\s\S]+?\sfrom\b'
+  not: { regex: '(?i)\bselect\s+(distinct\s+)?(top\s*\(?\s*[\w@]+\s*\)?\s+)?(\w+\.)?\*' }
+metadata:
+  harness:
+    probe: sql.select-columns
+    family: sql
+    title: Explicit SELECT column lists
+    site: a string or template literal holding a SELECT ... FROM statement
+    conforming: the SELECT names its columns (no `*`)
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: explicit
+    default: true
+    statement: 'SELECT statements list their columns; no SELECT *.'
+    fixText: 'Name the columns the code reads: SELECT id, sku, name FROM ...'
+    prose: ['select \*', 'list (the )?columns']
+---
+id: sql.select-columns/star
+language: TypeScript
+rule:
+  any:
+    - kind: string
+    - kind: template_string
+  regex: '(?i)\bselect\s+(distinct\s+)?(top\s*\(?\s*[\w@]+\s*\)?\s+)?(\w+\.)?\*[\s\S]*?\sfrom\b'
+metadata:
+  harness:
+    probe: sql.select-columns
+    variant: star

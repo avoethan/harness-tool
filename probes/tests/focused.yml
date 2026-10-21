@@ -1,0 +1,41 @@
+# Focused or skipped tests left in committed code (reported, never a standard).
+id: tests.focused/focused
+language: TypeScript
+rule:
+  kind: call_expression
+  any:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '^(describe|it|test|context|suite)$' }
+          - has: { field: property, regex: '^only$' }
+    - has: { field: function, regex: '^(fit|fdescribe)$' }
+metadata:
+  harness:
+    probe: tests.focused
+    family: tests
+    title: Focused and skipped tests
+    site: a describe/it/test call with .only or .skip (or fit/xit/fdescribe/xdescribe)
+    conforming: none; each occurrence is reported for a human to judge
+    hygiene: true
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: focused
+---
+id: tests.focused/skipped
+language: TypeScript
+rule:
+  kind: call_expression
+  any:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '^(describe|it|test|context|suite)$' }
+          - has: { field: property, regex: '^(skip|todo)$' }
+    - has: { field: function, regex: '^(xit|xdescribe|xtest)$' }
+metadata:
+  harness:
+    probe: tests.focused
+    variant: skipped

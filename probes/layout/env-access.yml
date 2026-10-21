@@ -1,0 +1,18 @@
+# process.env is read in one configuration module per package.
+# Built in (src/discover/builtins.ts: single-accessor).
+id: layout.env-access
+engine: builtin
+builtin: single-accessor
+family: layout
+title: One module reads process.env
+site: a source module (outside tests, scripts and tool configs) in a package where some module reads process.env
+conforming: the module does not read process.env, or it is the package's single reader
+polarity: fixed
+params: { pattern: '\bprocess\.env\b', what: process.env }
+check: { type: regex }
+variants:
+  - name: gateway
+    statement: 'Only {GATEWAY} reads process.env; other modules get configuration from it.'
+    fixText: 'Do not read process.env here; add the setting to {GATEWAY} and import it from there.'
+    prose: ['only module that (touches|reads) process\.env', 'configuration (comes|is read) from']
+  - name: bypass

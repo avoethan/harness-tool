@@ -1,0 +1,14 @@
+id: api.json-envelope/object
+valid:
+  - 'res.json(product);'
+  - 'other.json({ a });'
+invalid:
+  - 'res.json({ product });'
+  - 'res.status(201).json({ order });'
+---
+id: api.json-envelope/bare
+valid:
+  - 'res.json({ product });'
+invalid:
+  - 'res.json(product);'
+  - 'res.status(200).json(rows);'

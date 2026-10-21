@@ -1,0 +1,45 @@
+# Logging through the project's logger rather than console.*. The logger's
+# own implementation (log/logger/logging modules) and test files are not
+# scanned: a logger has to write to the console somewhere.
+id: logging.logger-not-console/logger
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: object, pattern: $LOGGER, regex: '(?i)^(this\.)?(log|logger|\w*logger)$' }
+      - has: { field: property, regex: '^(trace|debug|info|warn|warning|error|fatal|child)$' }
+metadata:
+  harness:
+    probe: logging.logger-not-console
+    family: logging
+    title: Log through the logger, not console
+    site: a logging call (console.* or <logger>.debug/info/warn/error) outside the logger module and tests
+    conforming: it goes through the project logger
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    capture: LOGGER
+    exclude: ['**/log.*', '**/logger.*', '**/logging.*', '**/logger/**', '**/logging/**', '**/*.test.*', '**/*.spec.*', '**/test/**', '**/tests/**', '**/__tests__/**', '**/scripts/**', '**/*.config.*']
+    declaredBy: { eslint: [no-console] }
+    check: { type: eslint, ref: no-console }
+    variant: logger
+    statement: 'Log through the project logger ({LOGGER}.info / .warn / .error), never console.*.'
+    fixText: 'Replace console.log/error with {LOGGER}.info/{LOGGER}.error and pass values in the fields object.'
+    prose: ['no[- ]console', 'never (use )?console', 'use the logger']
+---
+id: logging.logger-not-console/console
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has: { field: object, regex: '^console$' }
+      - has: { field: property, regex: '^(log|info|warn|error|debug|trace)$' }
+metadata:
+  harness:
+    probe: logging.logger-not-console
+    variant: console

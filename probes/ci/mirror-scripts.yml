@@ -1,0 +1,19 @@
+# Which package scripts CI runs (declared: read from the workflow files).
+# Built in (src/discover/builtins.ts: ci-scripts): a site is a check-like
+# script (build, typecheck, lint, format:check, test, ...) defined in a
+# package.json; it conforms when a CI workflow step runs it.
+id: ci.mirror-scripts
+engine: builtin
+builtin: ci-scripts
+family: ci
+title: CI runs the repo's checks
+site: a check-like package script (build, typecheck, lint, format:check, test, check)
+conforming: a CI workflow step runs it
+polarity: fixed
+check: { type: config, ref: ci }
+variants:
+  - name: in-ci
+    statement: 'CI runs {STEPS}; run the same commands and see them pass before calling work done.'
+    fixText: 'Run {STEPS} in the repository and fix what fails.'
+    prose: ['CI runs (the )?same', 'run the full check']
+  - name: not-in-ci

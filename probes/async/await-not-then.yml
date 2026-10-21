@@ -1,0 +1,32 @@
+# async/await versus .then() chains.
+id: async.await-not-then/await
+language: TypeScript
+rule:
+  kind: await_expression
+metadata:
+  harness:
+    probe: async.await-not-then
+    family: async
+    title: async/await rather than .then()
+    site: an await expression or a .then(...) call
+    conforming: promises are consumed with await
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: await
+    default: true
+    statement: 'Promises are consumed with async/await, not .then() chains.'
+    fixText: 'Rewrite the chain with await inside an async function: const r = await p;'
+---
+id: async.await-not-then/then
+language: TypeScript
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    has: { field: property, regex: '^then$' }
+metadata:
+  harness:
+    probe: async.await-not-then
+    variant: then

@@ -1,0 +1,47 @@
+# Trailing commas in lists whose closing bracket sits on its own line
+# (a list the formatter has broken over several lines). Lists that only span
+# lines because their last element does (a hugged callback or template) are
+# not sites.
+id: format.trailing-commas/trailing
+language: TypeScript
+rule:
+  any:
+    - kind: object
+    - kind: array
+    - kind: arguments
+    - kind: formal_parameters
+    - kind: named_imports
+  regex: ',\s*\n\s*[\]})]$'
+metadata:
+  harness:
+    probe: format.trailing-commas
+    family: format
+    title: Trailing commas in multi-line lists
+    site: an object, array, argument, parameter or import list whose closing bracket is on its own line
+    conforming: the last element is followed by the dominant style (comma or none)
+    polarity: either
+    formatterOwned: true
+    languages: [TypeScript, Tsx, JavaScript]
+    declaredBy:
+      prettier: { trailingComma: { all: trailing, es5: trailing, none: none, default: trailing } }
+    check: { type: config, ref: formatter }
+    variant: trailing
+    statement: 'Multi-line lists end with a trailing comma.'
+    fixText: "Add the trailing comma; the repo's formatter adds it."
+---
+id: format.trailing-commas/none
+language: TypeScript
+rule:
+  any:
+    - kind: object
+    - kind: array
+    - kind: arguments
+    - kind: formal_parameters
+    - kind: named_imports
+  regex: '[^,\s]\s*\n\s*[\]})]$'
+metadata:
+  harness:
+    probe: format.trailing-commas
+    variant: none
+    statement: 'Multi-line lists have no trailing comma.'
+    fixText: "Remove the trailing comma; the repo's formatter removes it."

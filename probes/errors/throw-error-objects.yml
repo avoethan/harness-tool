@@ -1,0 +1,28 @@
+# Throwing Error objects (or helpers that build them) versus literals.
+id: errors.throw-error-objects/object
+language: TypeScript
+rule:
+  kind: throw_statement
+  not: { has: { any: [ { kind: string }, { kind: template_string }, { kind: number }, { kind: object } ] } }
+metadata:
+  harness:
+    probe: errors.throw-error-objects
+    family: errors
+    title: Throw Error objects
+    site: a throw statement
+    conforming: it throws an Error (new X(...), a helper call or a caught error), not a literal
+    hygiene: true
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: object
+    default: true
+---
+id: errors.throw-error-objects/literal
+language: TypeScript
+rule:
+  kind: throw_statement
+  has: { any: [ { kind: string }, { kind: template_string }, { kind: number }, { kind: object } ] }
+metadata:
+  harness:
+    probe: errors.throw-error-objects
+    variant: literal

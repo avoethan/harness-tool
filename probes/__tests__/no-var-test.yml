@@ -1,0 +1,12 @@
+id: lint.no-var/let-const
+valid:
+  - 'var a = 1;'
+invalid:
+  - 'const a = 1;'
+  - 'let b = 2;'
+---
+id: lint.no-var/var
+valid:
+  - 'const a = 1;'
+invalid:
+  - 'var a = 1;'

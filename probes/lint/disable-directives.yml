@@ -1,0 +1,18 @@
+# Lint and type-check suppressions in comments (counted, never a standard).
+id: lint.disable-directives
+engine: content
+family: lint
+title: Lint and type-check suppression comments
+site: an eslint-disable, @ts-ignore, @ts-nocheck or @ts-expect-error comment
+conforming: none; every occurrence is reported so a human can judge it
+hygiene: true
+params: { unit: match }
+files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', '**/*.mts', '**/*.cts']
+check: { type: regex }
+variants:
+  - name: eslint-disable
+    pattern: 'eslint-disable(?:-next-line|-line)?\b'
+  - name: ts-ignore
+    pattern: '@ts-(?:ignore|nocheck)\b'
+  - name: ts-expect-error
+    pattern: '@ts-expect-error\b'

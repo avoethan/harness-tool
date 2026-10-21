@@ -1,0 +1,14 @@
+id: errors.throw-error-objects/object
+valid:
+  - "throw 'bad';"
+invalid:
+  - "throw new Error('bad');"
+  - 'throw notFound(`Product ${id}`);'
+  - 'throw err;'
+---
+id: errors.throw-error-objects/literal
+valid:
+  - "throw new Error('bad');"
+invalid:
+  - "throw 'bad';"
+  - 'throw { code: 1 };'

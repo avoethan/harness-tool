@@ -1,0 +1,15 @@
+id: format.quotes/single
+valid:
+  - 'const a = "x";'
+  - "const b = \"it's\";"
+invalid:
+  - "const a = 'x';"
+  - "import { x } from './x';"
+---
+id: format.quotes/double
+valid:
+  - "const a = 'x';"
+  - "const b = 'say \"hi\"';"
+invalid:
+  - 'const a = "x";'
+  - 'import { x } from "./x";'

@@ -1,0 +1,6 @@
+# Codex command rules (synthetic fixture)
+prefix_rule(
+    pattern = ["git", "push", "--force"],
+    decision = "forbidden",
+)
+prefix_rule(pattern = ["git", "push"], decision = "prompt")

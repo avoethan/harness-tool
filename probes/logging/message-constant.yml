@@ -1,0 +1,58 @@
+# Logger messages: constant text with values in a fields object, or interpolated text.
+id: logging.message-constant/constant
+language: TypeScript
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '(?i)^(this\.)?(log|logger|\w*logger)$' }
+          - has: { field: property, regex: '^(trace|debug|info|warn|warning|error|fatal)$' }
+    - has:
+        field: arguments
+        has:
+          nthChild: 1
+          any:
+            - kind: string
+            - kind: template_string
+              not: { has: { kind: template_substitution } }
+metadata:
+  harness:
+    probe: logging.message-constant
+    family: logging
+    title: Constant log messages
+    site: a logger call (<logger>.info/warn/error/...) whose first argument is a string or template literal
+    conforming: the message is constant text; variable data goes in a fields object
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: constant
+    statement: 'Log messages are constant text; variable data goes in the fields object (logger.info(''order created'', { orderId })).'
+    fixText: 'Move the values out of the message into the fields object: logger.info(''order created'', { orderId }).'
+    prose: ['structured log', 'fields object']
+---
+id: logging.message-constant/interpolated
+language: TypeScript
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        all:
+          - has: { field: object, regex: '(?i)^(this\.)?(log|logger|\w*logger)$' }
+          - has: { field: property, regex: '^(trace|debug|info|warn|warning|error|fatal)$' }
+    - has:
+        field: arguments
+        has:
+          nthChild: 1
+          any:
+            - kind: template_string
+              has: { kind: template_substitution }
+            - kind: binary_expression
+metadata:
+  harness:
+    probe: logging.message-constant
+    variant: interpolated

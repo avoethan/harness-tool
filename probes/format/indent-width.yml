@@ -1,0 +1,26 @@
+# Two or four spaces per indentation level (per file, judged by its shallowest indented line).
+id: format.indent-width
+engine: content
+family: format
+title: Indentation width
+site: a source file indented with spaces
+conforming: its shallowest indentation is the dominant width
+polarity: either
+formatterOwned: true
+params: { unit: file }
+files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', '**/*.mts', '**/*.cts']
+declaredBy:
+  prettier: { tabWidth: { '2': two, '4': four, default: two } }
+  editorconfig: { indent_size: { '2': two, '4': four } }
+check: { type: config, ref: formatter }
+variants:
+  - name: two
+    pattern: '^  [^ \s*]'
+    flags: m
+    statement: 'Indent with two spaces per level.'
+    fixText: "Re-indent with two spaces; the repo's formatter does it."
+  - name: four
+    pattern: '(?<![\s\S])(?![\s\S]*^  [^ \s*])[\s\S]*^    [^ \s*]'
+    flags: m
+    statement: 'Indent with four spaces per level.'
+    fixText: "Re-indent with four spaces; the repo's formatter does it."

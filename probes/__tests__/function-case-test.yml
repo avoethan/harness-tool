@@ -1,0 +1,22 @@
+id: naming.function-case/camel
+valid:
+  - 'function LoadOrder() {}'
+  - 'function load_order() {}'
+invalid:
+  - 'function loadOrder() {}'
+  - 'export async function get() {}'
+---
+id: naming.function-case/pascal
+valid:
+  - 'function loadOrder() {}'
+  - "function Banner() { return '<p>hi</p>'; }"
+  - "function Icon() { return '<svg/>'; }"
+invalid:
+  - 'function LoadOrder() {}'
+---
+id: naming.function-case/snake
+valid:
+  - 'function loadOrder() {}'
+  - 'function load() {}'
+invalid:
+  - 'function load_order() {}'

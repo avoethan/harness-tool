@@ -1,0 +1,46 @@
+# How errors are built at the throw site (informational histogram with the
+# helper and class names captured; feeds the judgment bundle).
+id: errors.error-construction/helper
+language: TypeScript
+rule:
+  kind: throw_statement
+  has:
+    kind: call_expression
+    has: { field: function, kind: identifier, pattern: $HELPER }
+metadata:
+  harness:
+    probe: errors.error-construction
+    family: errors
+    title: Error construction at throw sites
+    site: a throw statement that throws a new error
+    conforming: informational (helper call, custom class, or plain Error)
+    polarity: either
+    record: false
+    capture: HELPER
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: helper
+---
+id: errors.error-construction/custom-class
+language: TypeScript
+rule:
+  kind: throw_statement
+  has:
+    kind: new_expression
+    has: { field: constructor, not: { regex: '^Error$' } }
+metadata:
+  harness:
+    probe: errors.error-construction
+    variant: custom-class
+---
+id: errors.error-construction/plain-error
+language: TypeScript
+rule:
+  kind: throw_statement
+  has:
+    kind: new_expression
+    has: { field: constructor, regex: '^Error$' }
+metadata:
+  harness:
+    probe: errors.error-construction
+    variant: plain-error

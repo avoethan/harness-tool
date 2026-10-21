@@ -1,0 +1,43 @@
+# How handlers read request input: through a call (a validator or parser such
+# as parseId(req.params.id) or schema.parse(req.body)) or by casting it
+# (req.body as Order). Sites are casts and call arguments only.
+id: validation.request-input/validated
+language: TypeScript
+rule:
+  kind: member_expression
+  regex: '^(req|request)\.(body|params|query)\b'
+  inside:
+    kind: arguments
+    inside: { kind: call_expression }
+  not:
+    inside:
+      stopBy: end
+      kind: as_expression
+metadata:
+  harness:
+    probe: validation.request-input
+    family: validation
+    title: Request input passes through a validator
+    site: req.body / req.params / req.query handed to a call, or cast with `as`
+    conforming: it is passed to a call (validator, parser or helper) rather than cast
+    polarity: fixed
+    languages: [TypeScript, Tsx]
+    check: { type: ast-grep }
+    variant: validated
+    statement: 'Request input (req.body, req.params, req.query) is passed through a validator or parser before use, never cast with `as`.'
+    fixText: 'Parse the input with the project''s validator (for example parseId(req.params.id) or requireField(body, ...)) instead of `as`.'
+    prose: ['validat(e|ed|ion) (the )?(request|input|body)', 'never trust (the )?(request|input)']
+---
+id: validation.request-input/cast
+language: TypeScript
+rule:
+  kind: as_expression
+  has:
+    stopBy: end
+    kind: member_expression
+    regex: '^(req|request)\.(body|params|query)\b'
+  not: { regex: '\bas\s+(unknown|Record<string,\s*unknown>)\s*$' }
+metadata:
+  harness:
+    probe: validation.request-input
+    variant: cast

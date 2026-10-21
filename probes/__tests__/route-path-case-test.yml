@@ -1,0 +1,18 @@
+id: api.route-path-case/kebab
+valid:
+  - "router.get('/orderItems', h);"
+  - "router.get('/orders', h);"
+invalid:
+  - "router.get('/order-items/:id', h);"
+---
+id: api.route-path-case/camel
+valid:
+  - "router.get('/order-items', h);"
+invalid:
+  - "router.get('/orderItems', h);"
+---
+id: api.route-path-case/snake
+valid:
+  - "router.get('/order-items', h);"
+invalid:
+  - "app.post('/order_items', h);"

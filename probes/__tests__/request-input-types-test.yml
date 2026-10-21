@@ -1,0 +1,17 @@
+id: sql.request-input-types/typed
+valid:
+  - "request.input('id', id);"
+  - "userEvent.input(el, 'a', { delay: 1 });"
+invalid:
+  - "request.input('id', sql.Int, id);"
+  - "new sql.Request(tx).input('id', sql.Int, id);"
+---
+id: sql.request-input-types/untyped
+valid:
+  - "request.input('id', sql.Int, id);"
+  - 'el.input();'
+  - "fireEvent.input(input, { target: { value: 'abc' } });"
+invalid:
+  - "request.input('id', id);"
+  - 'request.input(name, value);'
+  - "pool.request().input('id', id);"

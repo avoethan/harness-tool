@@ -1,0 +1,12 @@
+id: async.await-in-loop/in-loop
+valid:
+  - 'async function f() { await a(); }'
+  - 'for (const x of xs) { list.map(async (y) => { await y; }); }'
+invalid:
+  - 'async function f() { for (const x of xs) { await save(x); } }'
+---
+id: async.await-in-loop/outside
+valid:
+  - 'async function f() { for (const x of xs) { await save(x); } }'
+invalid:
+  - 'async function f() { await a(); }'

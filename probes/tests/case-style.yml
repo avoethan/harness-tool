@@ -1,0 +1,40 @@
+# it(...) or test(...) for test cases.
+id: tests.case-style/it
+language: TypeScript
+rule:
+  kind: call_expression
+  has: { field: function, regex: '^it$' }
+  all:
+    - has:
+        field: arguments
+        has: { nthChild: 1, any: [ { kind: string }, { kind: template_string } ] }
+metadata:
+  harness:
+    probe: tests.case-style
+    family: tests
+    title: Test-case function
+    site: a test case call it(...) or test(...) with a name
+    conforming: it uses the dominant function
+    polarity: either
+    languages: [TypeScript, Tsx, JavaScript]
+    files: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**', '**/test/**', '**/tests/**']
+    check: { type: ast-grep }
+    variant: it
+    statement: 'Test cases are written with describe/it (not test()).'
+    fixText: 'Write the case as it("does x", ...) inside a describe block.'
+---
+id: tests.case-style/test
+language: TypeScript
+rule:
+  kind: call_expression
+  has: { field: function, regex: '^test$' }
+  all:
+    - has:
+        field: arguments
+        has: { nthChild: 1, any: [ { kind: string }, { kind: template_string } ] }
+metadata:
+  harness:
+    probe: tests.case-style
+    variant: test
+    statement: 'Test cases are written with test() (not it()).'
+    fixText: 'Write the case as test("does x", ...).'

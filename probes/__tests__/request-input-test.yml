@@ -1,0 +1,15 @@
+id: validation.request-input/validated
+valid:
+  - 'const o = req.body as Order;'
+  - 'const x = req.body;'
+invalid:
+  - 'const id = parseId(req.params.id);'
+  - 'const input = schema.parse(req.body);'
+---
+id: validation.request-input/cast
+valid:
+  - 'const id = parseId(req.params.id);'
+  - 'const body = (req.body ?? {}) as Record<string, unknown>;'
+invalid:
+  - 'const o = req.body as Order;'
+  - 'const q = req.query as { page: string };'

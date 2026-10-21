@@ -1,0 +1,14 @@
+id: naming.type-case/pascal
+valid:
+  - 'interface order_item { a: string }'
+invalid:
+  - 'interface OrderItem { a: string }'
+  - 'type Status = "a" | "b";'
+  - 'class HttpError extends Error {}'
+---
+id: naming.type-case/other
+valid:
+  - 'interface OrderItem { a: string }'
+invalid:
+  - 'interface order_item { a: string }'
+  - 'type status = string;'

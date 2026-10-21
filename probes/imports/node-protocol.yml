@@ -1,0 +1,32 @@
+# Node built-in modules imported with or without the node: prefix.
+id: imports.node-protocol/prefixed
+language: TypeScript
+rule:
+  kind: import_statement
+  has: { field: source, regex: '^[''"]node:' }
+metadata:
+  harness:
+    probe: imports.node-protocol
+    family: imports
+    title: node: prefix for built-ins
+    site: an import of a Node built-in module
+    conforming: it follows the dominant style (node:fs or fs)
+    polarity: either
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: prefixed
+    statement: 'Node built-ins are imported with the node: prefix (node:fs, node:path).'
+    fixText: "Import the built-in as 'node:<name>', for example import * as path from 'node:path'."
+    prose: ['node: (prefix|protocol)']
+---
+id: imports.node-protocol/bare
+language: TypeScript
+rule:
+  kind: import_statement
+  has: { field: source, regex: '^[''"](fs|path|os|crypto|child_process|url|util|http|https|events|stream|assert|buffer|timers|zlib|net|worker_threads|readline|dns|tls|querystring|module|process|perf_hooks|async_hooks|v8|vm)(/[\w/]*)?[''"]$' }
+metadata:
+  harness:
+    probe: imports.node-protocol
+    variant: bare
+    statement: 'Node built-ins are imported without the node: prefix (fs, path).'
+    fixText: "Import the built-in by its bare name, for example import * as path from 'path'."

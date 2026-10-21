@@ -1,0 +1,7 @@
+{
+  // user-level Claude Code settings (JSONC on purpose)
+  "permissions": {
+    "deny": ["Bash(git push --force*)", "Bash(git reset --hard*)"],
+    "ask": ["Bash(git push*)"],
+  },
+}

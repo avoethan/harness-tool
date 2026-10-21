@@ -1,0 +1,23 @@
+id: sql.sql-text-literal/literal
+valid:
+  - 'query(`SELECT id FROM dbo.products WHERE name LIKE ''%${q}%''`);'
+  - 'logger.info("selected the product");'
+  - 'query(text, params);'
+invalid:
+  - "query('SELECT id FROM dbo.products WHERE id = @id', { id });"
+  - "await execute(`UPDATE dbo.orders SET status = @status WHERE id = @id`, { id, status });"
+---
+id: sql.sql-text-literal/interpolated
+valid:
+  - "query('SELECT id FROM dbo.products WHERE id = @id', { id });"
+  - 'log(`selected ${n} rows`);'
+invalid:
+  - 'query(`SELECT id FROM dbo.products WHERE name LIKE ''%${q}%''`);'
+  - 'pool.request().query(`DELETE FROM dbo.orders WHERE id = ${id}`);'
+---
+id: sql.sql-text-literal/concatenated
+valid:
+  - "query('SELECT id FROM dbo.products WHERE id = @id', { id });"
+  - "label('total ' + n);"
+invalid:
+  - "query('SELECT id, sku FROM dbo.products ' + where);"

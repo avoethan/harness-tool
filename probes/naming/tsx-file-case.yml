@@ -1,0 +1,26 @@
+# Case of .tsx file names (React component files often differ from .ts files).
+id: naming.tsx-file-case
+engine: filename
+family: naming
+title: TSX file-name case
+site: a .tsx file
+conforming: its name (before suffixes such as .test or .stories) uses the dominant case
+polarity: either
+overlapping: true
+files: ['**/*.tsx']
+check: { type: regex }
+variants:
+  - name: pascal
+    pattern: '^[A-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9-]+)*\.tsx$'
+    statement: 'TSX file names are PascalCase, named after the component (OrderTable.tsx).'
+    fixText: 'Rename the file to PascalCase after its component and update the imports.'
+    prose: ['pascal[- ]?case']
+  - name: kebab
+    pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*\.tsx$'
+    statement: 'TSX file names are kebab-case (order-table.tsx).'
+    fixText: 'Rename the file to kebab-case and update the imports.'
+    prose: ['kebab[- ]case']
+  - name: camel
+    pattern: '^[a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9-]+)*\.tsx$'
+    statement: 'TSX file names are camelCase (orderTable.tsx).'
+    fixText: 'Rename the file to camelCase and update the imports.'

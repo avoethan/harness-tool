@@ -1,0 +1,37 @@
+# Explicit `any` in type positions (annotations, assertions, type arguments).
+id: lint.no-explicit-any/typed
+language: TypeScript
+rule:
+  any:
+    - kind: type_annotation
+    - kind: as_expression
+    - kind: type_arguments
+  not:
+    has: { stopBy: end, kind: predefined_type, regex: '^any$' }
+metadata:
+  harness:
+    probe: lint.no-explicit-any
+    family: lint
+    title: No explicit any
+    site: a type annotation, a type assertion (`as`) or a type-argument list
+    conforming: the type position names no `any` (unknown or a precise type)
+    polarity: fixed
+    declaredBy: { eslint: ['@typescript-eslint/no-explicit-any'] }
+    check: { type: eslint, ref: '@typescript-eslint/no-explicit-any' }
+    variant: typed
+    statement: 'No explicit `any`: annotations, assertions and type arguments use `unknown` or a precise type.'
+    fixText: 'Replace `any` with `unknown` and narrow it, or with the precise type (an interface, a union, a generic parameter).'
+    prose: ['no (explicit )?`?any`?', 'avoid `?any`?', 'unknown instead of any']
+---
+id: lint.no-explicit-any/any
+language: TypeScript
+rule:
+  any:
+    - kind: type_annotation
+    - kind: as_expression
+    - kind: type_arguments
+  has: { stopBy: end, kind: predefined_type, regex: '^any$' }
+metadata:
+  harness:
+    probe: lint.no-explicit-any
+    variant: any

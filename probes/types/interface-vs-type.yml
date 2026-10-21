@@ -1,0 +1,30 @@
+# Object shapes declared with `interface` or with `type X = { ... }`.
+id: types.interface-vs-type/interface
+language: TypeScript
+rule:
+  kind: interface_declaration
+metadata:
+  harness:
+    probe: types.interface-vs-type
+    family: types
+    title: interface or type for object shapes
+    site: an interface declaration, or a type alias whose value is an object type
+    conforming: it uses the dominant form
+    polarity: either
+    declaredBy: { eslint: ['@typescript-eslint/consistent-type-definitions'] }
+    check: { type: ast-grep }
+    variant: interface
+    statement: 'Object shapes are declared with `interface`, not `type X = { ... }`.'
+    fixText: 'Declare the shape as `interface X { ... }`.'
+---
+id: types.interface-vs-type/type-alias
+language: TypeScript
+rule:
+  kind: type_alias_declaration
+  has: { field: value, kind: object_type }
+metadata:
+  harness:
+    probe: types.interface-vs-type
+    variant: type-alias
+    statement: 'Object shapes are declared with `type X = { ... }`, not `interface`.'
+    fixText: 'Declare the shape as `type X = { ... }`.'

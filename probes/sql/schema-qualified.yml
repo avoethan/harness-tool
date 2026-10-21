@@ -1,0 +1,36 @@
+# Table references in SQL text carry a schema (dbo.orders) or not (orders).
+id: sql.schema-qualified/qualified
+language: TypeScript
+rule:
+  any:
+    - kind: string
+    - kind: template_string
+  regex: '(?i)\b(from|join|into|update)\s+\[?\w+\]?\.\[?\w+'
+  not: { regex: '(?i)\b(from|join|into|update)\s+\[?[A-Za-z_]\w*\]?(\s|$|,|\)|;)' }
+metadata:
+  harness:
+    probe: sql.schema-qualified
+    family: sql
+    title: Schema-qualified table names
+    site: a string or template literal holding SQL with FROM/JOIN/INTO/UPDATE table references
+    conforming: every table reference names its schema (dbo.orders)
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: qualified
+    statement: 'SQL names tables with their schema (dbo.orders, not orders).'
+    fixText: 'Qualify the table with its schema, for example dbo.orders.'
+    prose: ['schema[- ]qualified', 'dbo\.']
+---
+id: sql.schema-qualified/unqualified
+language: TypeScript
+rule:
+  any:
+    - kind: string
+    - kind: template_string
+  regex: '(?i)\b(from|join|into|update)\s+\[?[A-Za-z_]\w*\]?(\s|$|,|\)|;)'
+  has: { stopBy: end, kind: string_fragment, regex: '(?i)\b(select|insert|update|delete|merge)\b' }
+metadata:
+  harness:
+    probe: sql.schema-qualified
+    variant: unqualified

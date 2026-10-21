@@ -1,0 +1,19 @@
+# Re-runnable migrations: each DDL statement is guarded by an existence check.
+# Built in (src/discover/builtins.ts: sql-ddl-guards) because a guard is read
+# from the statements before the DDL in the same batch.
+id: sql.migration-ddl-guards
+engine: builtin
+builtin: sql-ddl-guards
+family: sql
+title: Re-runnable migrations (guarded DDL)
+site: a CREATE TABLE, ALTER TABLE ... ADD, CREATE INDEX, CREATE VIEW/PROCEDURE/FUNCTION statement in a migration file
+conforming: the statement is guarded (IF OBJECT_ID(...) IS NULL, IF COL_LENGTH(...) IS NULL, IF NOT EXISTS (...), CREATE OR ALTER, or an inline IF NOT EXISTS)
+polarity: fixed
+files: ['**/migrations/**/*.sql', '**/migration/**/*.sql', '**/db/migrate/**/*.sql', '**/sql/migrations/**/*.sql']
+check: { type: regex }
+variants:
+  - name: guarded
+    statement: 'Migrations are re-runnable: every CREATE TABLE, ALTER TABLE ... ADD and CREATE INDEX is guarded (IF OBJECT_ID(...) IS NULL, IF COL_LENGTH(...) IS NULL, IF NOT EXISTS (...)).'
+    fixText: 'Wrap the DDL in a guard: IF OBJECT_ID(N''dbo.t'', N''U'') IS NULL BEGIN CREATE TABLE ... END; IF COL_LENGTH(N''dbo.t'', N''c'') IS NULL BEGIN ALTER TABLE dbo.t ADD c ... END.'
+    prose: ['re-?runnable', 'idempotent', 'IF OBJECT_ID', 'COL_LENGTH', 'IF NOT EXISTS']
+  - name: unguarded

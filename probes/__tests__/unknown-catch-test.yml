@@ -1,0 +1,12 @@
+id: types.unknown-catch/annotated
+valid:
+  - 'try { a(); } catch (e) { b(e); }'
+invalid:
+  - 'try { a(); } catch (e: unknown) { b(e); }'
+---
+id: types.unknown-catch/plain
+valid:
+  - 'try { a(); } catch (e: unknown) { b(e); }'
+  - 'try { a(); } catch { b(); }'
+invalid:
+  - 'try { a(); } catch (e) { b(e); }'

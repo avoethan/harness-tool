@@ -1,0 +1,47 @@
+# Module-level constants holding a literal: UPPER_SNAKE or camelCase.
+id: naming.constant-case/upper
+language: TypeScript
+rule:
+  kind: lexical_declaration
+  regex: '^const\s'
+  any:
+    - inside: { kind: program }
+    - inside: { kind: export_statement }
+  has:
+    kind: variable_declarator
+    all:
+      - has: { field: name, regex: '^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$' }
+      - has: { field: value, any: [ { kind: number }, { kind: string }, { kind: 'true' }, { kind: 'false' } ] }
+metadata:
+  harness:
+    probe: naming.constant-case
+    family: naming
+    title: Module-level constant case
+    site: a module-level `const` initialised with a number, string or boolean literal
+    conforming: its name uses the dominant case
+    polarity: either
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: upper
+    statement: 'Module-level literal constants are UPPER_SNAKE_CASE (MAX_RETRIES).'
+    fixText: 'Rename the constant to UPPER_SNAKE_CASE.'
+---
+id: naming.constant-case/camel
+language: TypeScript
+rule:
+  kind: lexical_declaration
+  regex: '^const\s'
+  any:
+    - inside: { kind: program }
+    - inside: { kind: export_statement }
+  has:
+    kind: variable_declarator
+    all:
+      - has: { field: name, regex: '^[a-z][a-zA-Z0-9]*$' }
+      - has: { field: value, any: [ { kind: number }, { kind: string }, { kind: 'true' }, { kind: 'false' } ] }
+metadata:
+  harness:
+    probe: naming.constant-case
+    variant: camel
+    statement: 'Module-level literal constants are camelCase (maxRetries).'
+    fixText: 'Rename the constant to camelCase.'

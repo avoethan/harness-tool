@@ -1,0 +1,35 @@
+id: sql.migration-file-names/seq-kebab
+valid:
+  - migrations/add_notes.sql
+  - migrations/0003_add_orders_updated_at.sql
+invalid:
+  - migrations/0001_create-products.sql
+  - migrations/0007_add-shipments-notes.sql
+  - migrations/0002_init.sql
+---
+id: sql.migration-file-names/seq-snake
+valid:
+  - migrations/0001_create-products.sql
+invalid:
+  - migrations/0003_add_orders_updated_at.sql
+---
+id: sql.migration-file-names/flyway
+valid:
+  - migrations/0001_create-products.sql
+invalid:
+  - db/migration/V2__add_orders.sql
+  - db/migration/V2_1__fix.sql
+---
+id: sql.migration-file-names/timestamp
+valid:
+  - migrations/0001_create-products.sql
+invalid:
+  - migrations/20240105120000_create_orders.sql
+---
+id: sql.migration-file-names/other
+valid:
+  - migrations/0001_create-products.sql
+  - db/migration/V2__add_orders.sql
+invalid:
+  - migrations/add_notes.sql
+  - migrations/create-products.sql

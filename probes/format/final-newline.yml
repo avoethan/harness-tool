@@ -1,0 +1,24 @@
+# A newline at the end of every file.
+id: format.final-newline
+engine: content
+family: format
+title: Final newline
+site: a non-empty source file
+conforming: it ends the dominant way (with or without a final newline)
+polarity: either
+formatterOwned: true
+params: { unit: file }
+files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', '**/*.mts', '**/*.cts', '**/*.sql', '**/*.md', '**/*.json']
+declaredBy:
+  editorconfig: { insert_final_newline: { 'true': present, 'false': absent } }
+check: { type: config, ref: formatter }
+variants:
+  - name: present
+    pattern: '\n$'
+    default: true
+    statement: 'Every file ends with a newline.'
+    fixText: 'Add a newline at the end of the file.'
+  - name: absent
+    pattern: '[^\n]$'
+    statement: 'Files do not end with a newline.'
+    fixText: 'Remove the final newline.'

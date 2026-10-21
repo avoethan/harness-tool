@@ -1,0 +1,17 @@
+# How far relative imports climb, and whether path aliases are used instead
+# (informational; built in: src/discover/builtins.ts: import-shape).
+id: imports.relative-depth
+engine: builtin
+builtin: import-shape
+family: imports
+title: Relative import depth and aliases
+site: an import of a module inside the same package (relative path or alias)
+conforming: informational histogram (same folder, one or two levels up, three or more levels up, alias)
+polarity: either
+record: false
+check: { type: regex }
+variants:
+  - name: same-folder
+  - name: shallow
+  - name: deep
+  - name: alias

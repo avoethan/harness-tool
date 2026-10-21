@@ -1,0 +1,18 @@
+id: tests.mocking-library/vitest
+valid:
+  - "jest.mock('../db');"
+invalid:
+  - "vi.mock('../../src/db');"
+  - 'const f = vi.fn();'
+---
+id: tests.mocking-library/jest
+valid:
+  - "vi.mock('../db');"
+invalid:
+  - "jest.mock('../db');"
+---
+id: tests.mocking-library/sinon
+valid:
+  - "vi.fn();"
+invalid:
+  - 'sinon.stub(api, "get");'

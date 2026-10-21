@@ -1,0 +1,14 @@
+id: logging.logger-not-console/logger
+valid:
+  - "console.log('x');"
+  - "store.get('x');"
+invalid:
+  - "logger.info('order created', { id });"
+  - "this.logger.error('failed', { err });"
+---
+id: logging.logger-not-console/console
+valid:
+  - "logger.info('x');"
+invalid:
+  - "console.log('x');"
+  - "console.error(err);"

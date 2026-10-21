@@ -1,0 +1,12 @@
+id: tests.assertion-style/expect
+valid:
+  - 'assert.equal(a, 1);'
+invalid:
+  - 'expect(a).toBe(1);'
+---
+id: tests.assertion-style/assert
+valid:
+  - 'expect(a).toBe(1);'
+invalid:
+  - 'assert.equal(a, 1);'
+  - 'assert(ok);'

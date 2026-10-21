@@ -1,0 +1,11 @@
+id: format.line-endings/lf
+valid:
+  - "a\r\nb\r\n"
+invalid:
+  - "a\nb\n"
+---
+id: format.line-endings/crlf
+valid:
+  - "a\nb\n"
+invalid:
+  - "a\r\nb\r\n"

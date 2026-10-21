@@ -1,0 +1,38 @@
+id: layout.source-folders/routes
+valid:
+  - lib
+invalid:
+  - routes
+  - controllers
+---
+id: layout.source-folders/services
+valid:
+  - routes
+invalid:
+  - services
+---
+id: layout.source-folders/data
+valid:
+  - routes
+invalid:
+  - repositories
+  - db
+---
+id: layout.source-folders/lib
+valid:
+  - services
+invalid:
+  - lib
+  - utils
+---
+id: layout.source-folders/clients
+valid:
+  - lib
+invalid:
+  - clients
+---
+id: layout.source-folders/root
+valid:
+  - lib
+invalid:
+  - ''

@@ -1,0 +1,48 @@
+# Calls to an async function declared in the same file whose promise is
+# dropped (no await, return, void or .catch). Reported, never a standard.
+id: async.floating-promise/awaited
+language: TypeScript
+rule:
+  kind: await_expression
+  has:
+    kind: call_expression
+    has: { field: function, kind: identifier, pattern: $F }
+  inside:
+    stopBy: end
+    kind: program
+    has:
+      stopBy: end
+      kind: function_declaration
+      regex: '^async\b'
+      has: { field: name, pattern: $F }
+metadata:
+  harness:
+    probe: async.floating-promise
+    family: async
+    title: Dropped promises
+    site: a call, as a statement or awaited, to an async function declared in the same file
+    conforming: the call is awaited (or returned, voided, or has .catch)
+    hygiene: true
+    check: { type: ast-grep }
+    variant: awaited
+    default: true
+---
+id: async.floating-promise/floating
+language: TypeScript
+rule:
+  kind: expression_statement
+  has:
+    kind: call_expression
+    has: { field: function, kind: identifier, pattern: $F }
+  inside:
+    stopBy: end
+    kind: program
+    has:
+      stopBy: end
+      kind: function_declaration
+      regex: '^async\b'
+      has: { field: name, pattern: $F }
+metadata:
+  harness:
+    probe: async.floating-promise
+    variant: floating

@@ -1,0 +1,32 @@
+id: naming.ts-file-case/kebab
+valid:
+  - src/lib/orderCsv.ts
+  - src/routes/Products.ts
+  - src/lib/order_csv.ts
+invalid:
+  - src/lib/order-csv.ts
+  - test/unit/lib/order-csv.test.ts
+  - vitest.config.ts
+  - src/db.ts
+---
+id: naming.ts-file-case/camel
+valid:
+  - src/lib/order-csv.ts
+  - src/routes/Products.ts
+invalid:
+  - src/lib/orderCsv.ts
+  - src/db.ts
+---
+id: naming.ts-file-case/pascal
+valid:
+  - src/lib/order-csv.ts
+invalid:
+  - src/routes/Products.ts
+  - src/OrderService.test.ts
+---
+id: naming.ts-file-case/snake
+valid:
+  - src/lib/order-csv.ts
+  - src/lib/orderCsv.ts
+invalid:
+  - src/lib/order_csv.ts

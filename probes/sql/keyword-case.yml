@@ -1,0 +1,38 @@
+# Case of SQL keywords inside SQL text.
+id: sql.keyword-case/upper
+language: TypeScript
+rule:
+  any:
+    - kind: string
+    - kind: template_string
+  regex: '\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b'
+  not: { regex: '\b(select|insert|update|delete|merge)\s[\s\S]*\b(from|into|set|where)\b' }
+metadata:
+  harness:
+    probe: sql.keyword-case
+    family: sql
+    title: SQL keyword case
+    site: a string or template literal holding a SQL statement
+    conforming: its keywords use the dominant case
+    polarity: either
+    languages: [TypeScript, Tsx, JavaScript]
+    check: { type: ast-grep }
+    variant: upper
+    default: true
+    statement: 'SQL keywords are upper-case (SELECT ... FROM ... WHERE).'
+    fixText: 'Write SQL keywords in upper case.'
+---
+id: sql.keyword-case/lower
+language: TypeScript
+rule:
+  any:
+    - kind: string
+    - kind: template_string
+  regex: '\b(select|insert|update|delete|merge)\s[\s\S]*\b(from|into|set|where)\b'
+  not: { regex: '\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b' }
+metadata:
+  harness:
+    probe: sql.keyword-case
+    variant: lower
+    statement: 'SQL keywords are lower-case (select ... from ... where).'
+    fixText: 'Write SQL keywords in lower case.'

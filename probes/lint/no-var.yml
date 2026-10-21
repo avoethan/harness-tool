@@ -1,0 +1,29 @@
+# let/const versus var.
+id: lint.no-var/let-const
+language: TypeScript
+rule:
+  kind: lexical_declaration
+metadata:
+  harness:
+    probe: lint.no-var
+    family: lint
+    title: let/const instead of var
+    site: a variable declaration statement
+    conforming: it uses let or const
+    polarity: fixed
+    languages: [TypeScript, Tsx, JavaScript]
+    declaredBy: { eslint: [no-var] }
+    check: { type: eslint, ref: no-var }
+    variant: let-const
+    default: true
+    statement: 'Variables are declared with const (or let when reassigned), never var.'
+    fixText: 'Replace `var` with `const`, or `let` when the variable is reassigned.'
+---
+id: lint.no-var/var
+language: TypeScript
+rule:
+  kind: variable_declaration
+metadata:
+  harness:
+    probe: lint.no-var
+    variant: var

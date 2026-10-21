@@ -1,0 +1,14 @@
+id: imports.specifier-extensions/extensionless
+valid:
+  - "import { a } from './a.js';"
+  - "import express from 'express';"
+invalid:
+  - "import { a } from './a';"
+  - "import { db } from '../../src/db';"
+---
+id: imports.specifier-extensions/with-extension
+valid:
+  - "import { a } from './a';"
+  - "import data from './data.json';"
+invalid:
+  - "import { a } from './a.js';"

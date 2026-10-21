@@ -1,0 +1,12 @@
+id: types.interface-vs-type/interface
+valid:
+  - 'type A = { a: string };'
+invalid:
+  - 'interface A { a: string }'
+---
+id: types.interface-vs-type/type-alias
+valid:
+  - 'interface A { a: string }'
+  - "type S = 'a' | 'b';"
+invalid:
+  - 'type A = { a: string };'

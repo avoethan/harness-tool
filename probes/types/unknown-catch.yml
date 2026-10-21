@@ -1,0 +1,30 @@
+# Caught errors typed as unknown before use (informational).
+id: types.unknown-catch/annotated
+language: TypeScript
+rule:
+  kind: catch_clause
+  all:
+    - has: { field: parameter, kind: identifier }
+    - has: { kind: type_annotation }
+metadata:
+  harness:
+    probe: types.unknown-catch
+    family: types
+    title: Typed catch parameters
+    site: a catch clause with a parameter
+    conforming: informational (annotated `: unknown` or not)
+    polarity: either
+    record: false
+    check: { type: ast-grep }
+    variant: annotated
+---
+id: types.unknown-catch/plain
+language: TypeScript
+rule:
+  kind: catch_clause
+  has: { field: parameter, kind: identifier }
+  not: { has: { kind: type_annotation } }
+metadata:
+  harness:
+    probe: types.unknown-catch
+    variant: plain

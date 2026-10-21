@@ -1,0 +1,30 @@
+# Case of JavaScript file names.
+id: naming.js-file-case
+engine: filename
+family: naming
+title: JavaScript file-name case
+site: a .js/.jsx/.mjs/.cjs file
+conforming: its name (before suffixes such as .test or .config) uses the dominant case
+polarity: either
+overlapping: true
+files: ['**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs']
+exclude: ['**/*.min.js']
+check: { type: regex }
+variants:
+  - name: kebab
+    pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*\.[mc]?jsx?$'
+    statement: 'JavaScript file names are kebab-case (order-csv.js).'
+    fixText: 'Rename the file to kebab-case and update the imports that name it.'
+    prose: ['kebab[- ]case']
+  - name: camel
+    pattern: '^[a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9-]+)*\.[mc]?jsx?$'
+    statement: 'JavaScript file names are camelCase (orderCsv.js).'
+    fixText: 'Rename the file to camelCase and update the imports that name it.'
+  - name: pascal
+    pattern: '^[A-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9-]+)*\.[mc]?jsx?$'
+    statement: 'JavaScript file names are PascalCase (OrderCsv.js).'
+    fixText: 'Rename the file to PascalCase and update the imports that name it.'
+  - name: snake
+    pattern: '^[a-z0-9]+(?:_[a-z0-9]+)*(?:\.[a-z0-9_-]+)*\.[mc]?jsx?$'
+    statement: 'JavaScript file names are snake_case (order_csv.js).'
+    fixText: 'Rename the file to snake_case and update the imports that name it.'

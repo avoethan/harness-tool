@@ -1,0 +1,33 @@
+# Case of TypeScript file names (the part before the first dot).
+id: naming.ts-file-case
+engine: filename
+family: naming
+title: TypeScript file-name case
+site: a .ts/.mts/.cts file (declaration files excluded)
+conforming: its name (before suffixes such as .test or .config) uses the dominant case
+polarity: either
+overlapping: true
+files: ['**/*.ts', '**/*.mts', '**/*.cts']
+exclude: ['**/*.d.ts']
+check: { type: regex }
+variants:
+  - name: kebab
+    pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*\.[mc]?ts$'
+    statement: 'TypeScript file names are kebab-case: lower-case words joined by hyphens (order-csv.ts; suffixes such as .test.ts are fine).'
+    fixText: 'Rename the file to kebab-case (orderCsv.ts or OrderCsv.ts -> order-csv.ts) and update the imports that name it.'
+    prose: ['kebab[- ]case', 'lower-case (file )?names']
+  - name: camel
+    pattern: '^[a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9-]+)*\.[mc]?ts$'
+    statement: 'TypeScript file names are camelCase (orderCsv.ts).'
+    fixText: 'Rename the file to camelCase and update the imports that name it.'
+    prose: ['camel[- ]?case (file )?names']
+  - name: pascal
+    pattern: '^[A-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9-]+)*\.[mc]?ts$'
+    statement: 'TypeScript file names are PascalCase (OrderCsv.ts).'
+    fixText: 'Rename the file to PascalCase and update the imports that name it.'
+    prose: ['pascal[- ]?case (file )?names']
+  - name: snake
+    pattern: '^[a-z0-9]+(?:_[a-z0-9]+)*(?:\.[a-z0-9_-]+)*\.[mc]?ts$'
+    statement: 'TypeScript file names are snake_case (order_csv.ts).'
+    fixText: 'Rename the file to snake_case and update the imports that name it.'
+    prose: ['snake[_ ]case (file )?names']

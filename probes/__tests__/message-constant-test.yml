@@ -1,0 +1,14 @@
+id: logging.message-constant/constant
+valid:
+  - 'logger.info(`order ${id} created`);'
+  - "console.log('x');"
+invalid:
+  - "logger.info('order created', { id });"
+  - 'logger.warn(`retrying`);'
+---
+id: logging.message-constant/interpolated
+valid:
+  - "logger.info('order created', { id });"
+invalid:
+  - 'logger.info(`order ${id} created`);'
+  - "logger.error('failed: ' + err.message);"

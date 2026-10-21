@@ -1,0 +1,12 @@
+id: async.await-not-then/await
+valid:
+  - 'p.then((r) => r);'
+invalid:
+  - 'async function f() { const r = await p; }'
+---
+id: async.await-not-then/then
+valid:
+  - 'async function f() { const r = await p; }'
+invalid:
+  - 'p.then((r) => r);'
+  - 'fetch(u).then((r) => r.json()).then(show);'
