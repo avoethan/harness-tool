@@ -46,6 +46,7 @@ export const COMMANDS: Array<[string, string, string]> = [
   ['task', 'task', 'Personal task ledger: next, claim, done, fail, list'],
   ['writeup', 'writeup', 'Produce the PR write-up from the brief and evidence'],
   ['land', 'land', 'Personal setting: merge to main after PASS, watch CI, fix or revert'],
+  ['pr', 'pr', 'Personal setting: open the pull request for a pushed task branch (you run it)'],
   ['run', 'run', 'Personal setting: drive the task queue with headless sessions'],
   ['learn', 'learn', 'Learning loop: scan captured corrections, prove enforcers, review'],
   ['judgment', 'judgment', 'Hand a judgment result to the harness (the agent may not write the harness state itself)'],

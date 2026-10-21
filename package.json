@@ -1,6 +1,6 @@
 {
   "name": "agent-harness",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Reads a codebase and its agent setup, works out the real standards with evidence, and configures a harness so coding agents (Devin desktop, Claude Code, Codex) follow those standards, prove their work, and need a human rarely.",
   "license": "MIT",
   "private": false,
@@ -21,6 +21,8 @@
     "test:behaviour": "node dist/test/run.js behaviour",
     "test:safety": "node dist/test/run.js safety",
     "check:public": "node scripts/check-public.js",
+    "publish:check": "node scripts/publish-copy.js --check",
+    "publish:copy": "node scripts/publish-copy.js --publish",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

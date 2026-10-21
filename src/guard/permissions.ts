@@ -66,6 +66,7 @@ const NON_GIT_PREFIXES: Partial<Record<RailId, string[][]>> = {
     ['harness', 'undo'],
     ['harness', 'uninstall'],
     ['harness', 'self-update'],
+    ['harness', 'pr'],
     ['harness', 'config', 'set'],
     ['harness', 'db', 'mark'],
     ['harness', 'db', 'unmark'],

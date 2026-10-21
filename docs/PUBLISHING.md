@@ -3,9 +3,10 @@
 The tool is the `harness/` folder and nothing else. The repository it is
 developed in also holds private material outside that folder (research notes,
 design and mission files, test stand-ins, a private token list). This page
-gives the checks to run first and two ways to publish only the tool.
+gives the checks to run first, a script that publishes only the tool and keeps
+the public copy in step, and the two manual ways (options A and B).
 
-**Option A, recommended: a new public repository made from the `harness/`
+**Option A (done by the script in section 2; by hand in section 3): a new public repository made from the `harness/`
 folder, with its history flattened to one commit.** Nothing outside the
 folder, and no old version of any file, can leak.
 
@@ -88,7 +89,56 @@ The tests contain obviously fake, secret-shaped strings (alphabet runs such as
 rails are tested against them. If GitHub push protection flags one when you
 push, choose "it's used in tests".
 
-## 2. Option A: a new public repository from the tool folder
+## 2. Publishing with the script
+
+`scripts/publish-copy.js` automates option A below and keeps the public
+history. It runs from the development repository (it refuses to run from the
+public copy, which has no `harness/` folder), never edits anything under
+`harness/`, and prints every command it runs. It is also in the npm scripts:
+`npm run publish:check -- <public>` and `npm run publish:copy -- <public>`.
+`<public>` is the public repository's URL (or a bare repository's folder).
+
+```sh
+cd <dev>/harness
+
+# Is the public main identical to harness/ at HEAD? Prints the differing paths, exit 1 if any.
+node scripts/publish-copy.js --check <public>
+
+# Publish HEAD:harness as a new commit on the public main.
+node scripts/publish-copy.js --publish <public> --version <x.y.z> --tag \
+  --denylist <private-tokens>
+```
+
+What `--publish` does, in order:
+
+1. Refuses when `<dev>/harness` has uncommitted changes (only committed
+   content is published), or when `harness/package.json`'s version equals the
+   public main's version and the content differs (pass `--force` to publish a
+   second commit at the same version). `--version` is optional; when given it
+   must equal `package.json`'s.
+2. Writes `git archive HEAD:harness` into a temporary folder and, there, runs
+   `npm ci --ignore-scripts`, `npm run build`, `npm run test:quick` with agent
+   sessions off (`HARNESS_SKIP_CLAUDE=1 HARNESS_SAFETY_BEHAVIOUR=0`) and
+   `scripts/check-public.js` (with `--denylist` when given). Any failure stops
+   it before anything is pushed.
+3. Commits the copy as a **child of the public main**: one commit per publish,
+   subject `harness <version>`, body naming the development commit and its date.
+   It checks that the commit's tree equals `HEAD:harness`, then pushes `main`.
+   An empty public repository gets one root commit (option A's result).
+4. With `--tag`, pushes `v<version>`. A tag push the transport refuses (some
+   proxies do) is reported and is not fatal: tag the published commit from a
+   terminal that can.
+
+If the public main already equals `HEAD:harness` the script says so and
+publishes nothing. `--skip-build` skips the npm steps and exists only for the
+script's own tests; do not use it to publish. The push needs credentials for
+the public repository (your git credential helper or `gh auth`); the script
+never reads or stores a token.
+
+## 3. Option A, the manual fallback: a new public repository from the tool folder
+
+Use this when the script cannot run (no Node on the publishing machine, a
+first publish you want to read line by line).
 
 ```sh
 # Copy exactly the committed tool folder: no node_modules, no dist, no history.
@@ -143,7 +193,7 @@ repository's history to the public one.
 repository variable `HARNESS_TOOL_REPO` (`<you>/<name>`); it finds the tool
 at the repository root (option A) or in a `harness/` folder (option B).
 
-## 3. Option B: make the development repository public
+## 4. Option B: make the development repository public
 
 > **Warning.** Making a repository public publishes its whole history, every
 > branch and tag, and every pull request ref (`refs/pull/<n>/head`). GitHub
@@ -181,7 +231,33 @@ you run yourself), delete every other branch and tag on the remote
 no other branch, tag, release or pull request remains, and only then switch
 the visibility to public (Settings, General, Danger Zone).
 
-## 4. After publishing
+## 5. Keeping the copy in step
+
+- Changes are made only in the development repository's `harness/` folder and
+  reach the public repository only through the script. The public repository
+  takes no direct commits (no edits in the GitHub web editor, no merged pull
+  requests), because the next publish replaces its content with `harness/`.
+- Run `--check` before a publish (it should say "identical" to the last
+  published commit, or differ only by what you meant to publish) and again
+  after (it must say identical). A difference you did not make is a direct
+  edit in the public repository: bring it back into `harness/` by hand,
+  commit it, then publish.
+- A CI job in the development repository may run `--check` on every push to
+  the main branch when a public URL is configured (a repository variable); it
+  needs no write access. It fails when the public copy lags `harness/`, which
+  is the reminder to publish.
+- Each release: bump the version in `harness/package.json`, add the
+  `CHANGELOG.md` entry, commit, run `--check`, run `--publish`, run `--check`.
+
+**State today (2026-10-21).** The public repository is
+the publisher's `harness-tool` repository on GitHub. Its `main` is commit `5711077`,
+`harness 0.2.0`: the tree of `HEAD:harness` at development commit `4286051`,
+published by hand with option A (one root commit). The `v0.2.0` tag was not
+pushed, because the session proxy refuses tag pushes. The first script publish
+continues that history as a child commit; its `--tag` push may be refused for
+the same reason, in which case tag from a terminal.
+
+## 6. After publishing
 
 On the work machine, follow [TEAM-SETUP.md](TEAM-SETUP.md) (team setting) or
 [PERSONAL-SETUP.md](PERSONAL-SETUP.md) (personal setting), cloning the public

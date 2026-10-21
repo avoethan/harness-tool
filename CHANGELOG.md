@@ -3,6 +3,14 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.3.0 (2026-10-21)
+
+Integrations the user asked for after the first public release.
+
+- Publishing: `scripts/publish-copy.js` (`npm run publish:check`, `npm run publish:copy`) publishes `HEAD:harness` to the public repository as a child commit of its `main` (one commit per publish, checks run on the copy first, optional tag), and `--check` reports any difference between the public `main` and `harness/` so the copy cannot drift. `docs/PUBLISHING.md` is rewritten around it and records the public repository's state.
+- `harness intake --jira <KEY>` reads the ticket from Jira (read-only: one request to the configured https host, API v2, token from the environment only) and runs intake on it; the ticket is saved to the inbox as `<KEY>.txt`. New settings `jira.baseUrl`, `jira.acceptanceField`, `jira.emailEnv`, `jira.tokenEnv` (machine config only); environment variables `HARNESS_JIRA_EMAIL` and `HARNESS_JIRA_TOKEN` by default.
+- New `harness pr open [--task <id>] [--repo <path>] [--base <branch>] [--draft] [--dry-run] [--json]` (personal setting, run by you): opens the pull request for a pushed task branch from the write-up (title = the brief title, body = the write-up), prints its address and records it in the run folder (`pr.json`). Refuses in the team setting (exit 4), when the branch is not on the remote at the same tip, and when there is no write-up; reports an already open pull request instead of duplicating it; `--dry-run` sends nothing. Agents cannot run it: `pr` is in `HARNESS_ADMIN_SUBS` and in the rendered deny rules of Claude, Codex and Devin.
+
 ## 0.2.0 (2026-10-21)
 
 Every change below came from the Stage 3 evaluation on the stand-in workspaces and the review of the first fix round; the counted evaluation describes 0.1.0.

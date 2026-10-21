@@ -34,7 +34,7 @@ export const meta: CommandMeta = {
 };
 
 /** Top-level keys `set` may touch. Everything else is refused. */
-export const SETTABLE_TOP = new Set(['setting', 'agents', 'workspaceRoot', 'repos', 'mcp', 'caps', 'include', 'reviews', 'verify']);
+export const SETTABLE_TOP = new Set(['setting', 'agents', 'workspaceRoot', 'repos', 'mcp', 'caps', 'include', 'reviews', 'verify', 'jira']);
 
 /** Keys that `set` must never write: the DB allowlist has its own command with a hash; the rest is bookkeeping. */
 export function refusedKeyReason(key: string): string | null {
@@ -73,6 +73,25 @@ export function setConfigValue(c: HarnessConfig, key: string, value: unknown): s
     case 'reviews.source':
       if (value !== 'github-api' && value !== 'pasted' && value !== 'none') return 'reviews.source must be github-api, pasted or none';
       break;
+    case 'jira.baseUrl': {
+      let u: URL | null = null;
+      try {
+        u = typeof value === 'string' ? new URL(value) : null;
+      } catch {
+        u = null;
+      }
+      if (!u || u.protocol !== 'https:' || !u.hostname || u.username || u.password || u.search || u.hash) return 'jira.baseUrl must be an https address without credentials, for example https://yourcompany.atlassian.net';
+      value = (value as string).replace(/\/+$/, '');
+      break;
+    }
+    case 'jira.acceptanceField':
+      if (typeof value !== 'string' || !/^customfield_\d{3,9}$/.test(value)) return 'jira.acceptanceField must be a field id such as customfield_10042';
+      break;
+    case 'jira.emailEnv':
+    case 'jira.tokenEnv':
+      // The *name* of the variable, never the email or the token.
+      if (typeof value !== 'string' || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(value)) return `${key} is the NAME of an environment variable (upper case, digits, _), for example HARNESS_JIRA_TOKEN; never the value itself`;
+      break;
     // verify.* (VerifyConfig): nothing here widens the DB rail, every identity is still checked against db.allowlist.
     case 'verify.db.passwordEnv':
       // The *name* of the variable, never the password: refuse anything that does not look like a variable name.
@@ -100,7 +119,7 @@ export function setConfigValue(c: HarnessConfig, key: string, value: unknown): s
         if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return `${key} must be a positive whole number`;
       } else if (key.startsWith('caps.')) {
         if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return `${key} must be a non-negative number`;
-      } else if (key === 'caps' || key === 'mcp' || key === 'reviews') {
+      } else if (key === 'caps' || key === 'mcp' || key === 'reviews' || key === 'jira') {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return `${key} must be a JSON object`;
       } else if (key === 'repos' || key === 'include') {
         if (!Array.isArray(value)) return `${key} must be a JSON array`;

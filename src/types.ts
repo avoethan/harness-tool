@@ -46,8 +46,25 @@ export interface HarnessConfig {
   gate?: GateConfig;
   /** Landing settings (optional, personal setting; see src/land/README.md). */
   land?: LandConfig;
+  /** Jira settings for `harness intake --jira <KEY>` (optional; machine config only, read-only use). */
+  jira?: JiraConfig;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Settings for `harness intake --jira <KEY>`. Names of environment variables, never the values:
+ * the token is read from the environment at the moment of the request and is never stored.
+ */
+export interface JiraConfig {
+  /** https only; its host is the only host the command may call. */
+  baseUrl?: string;
+  /** Field id of a custom acceptance-criteria field, for example `customfield_10042`. */
+  acceptanceField?: string;
+  /** Environment variable holding the Atlassian account email (default HARNESS_JIRA_EMAIL). */
+  emailEnv?: string;
+  /** Environment variable holding the API token or personal access token (default HARNESS_JIRA_TOKEN). */
+  tokenEnv?: string;
 }
 
 /**

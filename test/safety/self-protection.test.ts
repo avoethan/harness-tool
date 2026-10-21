@@ -265,6 +265,10 @@ function adminDeny(): string[] {
     'harness selfcheck probe-log --clear',
     `node "${cliPath}" config set caps.turns 999`,
     `node ${cliPath} db mark --server prod-db.example.invalid --test`,
+    'harness pr open',
+    'harness pr open --dry-run',
+    'harness pr open --task T-003 --draft --base main',
+    `node "${cliPath}" pr open --dry-run`,
     'harness gate --from-install',
     'bash -c "harness apply"',
   ];

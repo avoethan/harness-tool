@@ -32,6 +32,16 @@ test('personal setting: every setting-independent rail has rules; team-only rail
   }
 });
 
+test('harness pr is denied in the rendered rules of all three agents, in both settings', () => {
+  for (const setting of ['team', 'personal'] as const) {
+    const p = buildPermissions({ setting, protectedRoots: ROOTS, verificationAllow: [['harness', 'gate']], runsDir: '/home/u/.harness/runs' });
+    assert.ok(p.claude.deny.includes('Bash(harness pr)') && p.claude.deny.includes('Bash(harness pr *)'), `claude ${setting}`);
+    assert.ok(p.devin.deny.includes('Exec(harness pr)'), `devin ${setting}`);
+    assert.ok(p.codex.rules.some((r) => r.includes('["harness", "pr"]') && r.includes('forbidden')), `codex ${setting}`);
+    assert.ok(!p.claude.allow.some((a) => a.includes('harness pr')), `no allow for pr (${setting})`);
+  }
+});
+
 test('Claude rules use the documented syntax', () => {
   const p = buildPermissions({ setting: 'team', protectedRoots: ROOTS, verificationAllow: [['npm', 'test'], ['harness', 'gate']], runsDir: '/home/u/.harness/runs' });
   for (const r of [...p.claude.deny, ...p.claude.allow]) assert.match(r, CLAUDE_RULE_RE, r);

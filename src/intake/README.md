@@ -46,6 +46,7 @@ counts only.
 | Command | Exit codes |
 |---|---|
 | `harness intake --from <file\|-> [--repo <path>] [--unattended] [--json]` | 0 ok; 1 plan lint failed (brief saved, problems listed); 2 usage, unreadable, empty or over 1 MB |
+| `harness intake --jira <KEY> [--repo <path>] [--unattended] [--json]` | as `--from`; also 1 Jira refused (401, 403, 404, a redirect, unreachable); 2 `--from` given too, a key not like `SHOP-102`, Jira not set up, or no token in the environment |
 | `harness intake show [id] [--repo <path>] [--json]` | 0; 1 no brief or lint failed |
 | `harness brief [id] [--repo <path>] [--json]` | the same as `harness intake show` (an alias: same flags, same output, same exit codes) |
 | `harness intake answer <id> --q <n> --answer "<letter or text>" [--json]` | 0; 1 unknown brief, `Qn` not open, or lint failed; 2 usage |
@@ -63,6 +64,26 @@ counts only.
 | `harness task validate [--json]` | 0 clean; 1 problems listed |
 | `harness gate` (full run) | also writes `writeup.md` through this module and prints `Write-up: <path>` as its last line (see `src/gate/README.md`) |
 | `harness writeup [--task <id>] [--repo <path>] [--out <file>] [--json]` | 0; 1 no task or brief; 4 `--out` inside a team repo (refused) |
+
+### Reading a ticket from Jira
+
+`harness intake --jira SHOP-102` fetches the issue itself and then behaves exactly like
+`--from` on the text it fetched. It is read-only: one `GET <baseUrl>/rest/api/2/issue/<KEY>?fields=summary,description[,<acceptanceField>]`
+(API v2, whose description is wiki-markup text that `parse.ts` already reads), 20 second
+timeout, no redirect followed, an error shows the status and the key and never the body.
+The ticket is composed as a pasted one would read (`h1. <summary>`, `h2. Description`, the
+description, and `h2. Acceptance Criteria` with the acceptance field's text when one is
+configured) and saved to the inbox as `<KEY>.txt`, the same place a pasted ticket goes.
+
+Settings (machine config only; a repository's `.harness/config.json` is not consulted, so a
+repository cannot point the token at another host), set by the user in a terminal:
+`jira.baseUrl` (https only; the only host called), `jira.acceptanceField` (for example
+`customfield_10042`; absent means the criteria stay inside the description), `jira.emailEnv`
+(name of the variable holding the account email, default `HARNESS_JIRA_EMAIL`) and
+`jira.tokenEnv` (default `HARNESS_JIRA_TOKEN`). The token comes from the environment only and is
+never stored, printed or logged. When the email variable is set the request uses HTTP Basic
+`email:token` (Jira Cloud); otherwise `Authorization: Bearer <token>` (Data Center personal
+access tokens). `--jira` and `--from` together exit 2.
 
 All `task` subcommands and `phase` take `--repo <path>` (default: the git
 root of the working directory). In the team setting, the `task` subcommands

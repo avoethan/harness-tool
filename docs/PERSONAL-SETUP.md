@@ -168,6 +168,29 @@ Every landing writes `~/.harness/runs/<repo>/<task>/landing.json` with
 (the tree after the revert equals `main` before the landing), plus each
 step it went through.
 
+## 5a. Open the pull request
+
+`harness land` merges into your `main`. When you would rather review a
+pull request first (or `main` is protected), push the task branch yourself,
+then open the pull request:
+
+```sh
+git push -u origin task/T-002
+harness pr open --task T-002 --dry-run     # show the request, send nothing
+harness pr open --task T-002               # add --draft or --base <branch> if needed
+```
+
+It uses the write-up `harness gate` produced as the description and the
+task's title as the title, prints the pull request address and saves it in
+`~/.harness/runs/<repo>/<task>/pr.json`. It needs `GITHUB_TOKEN` or
+`GH_TOKEN` (or a signed-in `gh`) with permission to write pull requests. It
+refuses when the branch is not on `origin` at the same commit (it tells you
+the `git push` to run), when there is no write-up, and in the team setting
+(exit 4). If a pull request for the branch is already open it prints that
+one and creates nothing. Only you can run it: the guard denies
+`harness pr` to every agent, and the command is the only place the harness
+posts to GitHub. See `src/pr/README.md`.
+
 ## 6. Pause and resume
 
 ```sh

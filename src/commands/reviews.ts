@@ -78,6 +78,11 @@ export function setHttpGet(fn: HttpGet): HttpGet {
   return prev;
 }
 
+/** One GET through the current HTTP layer (so other read-only fetchers share the test mock). */
+export function httpGetOnce(url: string, headers: Record<string, string>, timeoutMs: number): Promise<HttpResponse> {
+  return httpGet(url, headers, timeoutMs);
+}
+
 // ---------------------------------------------------------------------------
 // token (never stored, printed or logged)
 // ---------------------------------------------------------------------------

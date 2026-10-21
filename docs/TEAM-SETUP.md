@@ -83,6 +83,23 @@ agent. Nothing is written inside your repositories; check it if you like:
 cd "<workspace>\<a repository>"; git status
 ```
 
+### Optional: read tickets straight from Jira
+
+So that the agent can be given a ticket key instead of pasted text, tell the
+harness where your Jira is and how to sign in (once, in a terminal):
+
+```powershell
+harness config set jira.baseUrl https://yourcompany.atlassian.net
+harness config set jira.acceptanceField customfield_10042   # only if criteria live in their own field
+```
+
+Then set two environment variables on the work machine (user level, not in any
+repository): `HARNESS_JIRA_EMAIL` (your Atlassian account email; leave it unset
+for Jira Data Center) and `HARNESS_JIRA_TOKEN` (an Atlassian API token, created
+under your Atlassian account's security settings, or a personal access token on
+Data Center). The harness only reads the issue, never stores the token, and
+calls only the host you set. Try it: `harness intake --jira SHOP-102`.
+
 ### Mark the test database (if you skipped it, or have another)
 
 ```powershell

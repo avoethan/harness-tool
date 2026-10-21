@@ -72,6 +72,9 @@ hold backticks, quotes and `$`, which the shell or the agent's own permission
 check reads as code, and the command is refused. `--from -` (standard input)
 exists for people typing in a terminal.
 
+When the user gives a ticket key (for example `SHOP-102`) instead of pasted
+text, run `harness intake --jira SHOP-102`; it reads the ticket itself.
+
 Expected output (shape):
 
 ```

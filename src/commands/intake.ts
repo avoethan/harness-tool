@@ -2,6 +2,7 @@
  * `harness intake` — turn a pasted ticket into a brief.
  *
  *   harness intake --from <file|-> [--repo <path>] [--unattended] [--json]
+ *   harness intake --jira <KEY> [--repo <path>] [--unattended] [--json]
  *   harness intake show [id] [--repo <path>] [--json]
  *   harness intake answer <id> --q <n> --answer "<text or option letter>" [--json]
  *   harness intake answer <id> --all-recommended [--json]
@@ -12,14 +13,20 @@
  * for every mapped repo. The ticket text is never logged; the instrumentation
  * event carries the brief id, the ticket's sha256 and counts.
  *
+ * `--jira <KEY>` reads the issue from Jira (read-only, token from the environment), saves it as
+ * `<inbox>/<KEY>.txt` and runs the same intake on that file.
+ *
  * Exit codes: 0 ok; 1 plan lint failed (the brief is saved and the problems
- * are listed) or nothing found; 2 usage.
+ * are listed), nothing found, or Jira refused; 2 usage (including `--jira` with `--from`, a bad
+ * key, jira not set up, a missing token).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { CommandMeta } from '../cli';
 import { DEFAULT_BOOLEANS, flagBool, flagStr, parseArgv } from '../lib/argv';
-import { repoIdFor, resolveConfig } from '../lib/config';
+import { loadConfig, repoIdFor, resolveConfig } from '../lib/config';
+import { inboxHome } from '../lib/paths';
+import { fetchJiraTicket } from '../intake/jira';
 import { instrument } from '../lib/log';
 import { nearestRepoRoot } from '../lib/git';
 import { formatQuestionsBlock } from '../intake/ambiguity';
@@ -42,8 +49,8 @@ import {
 export const meta: CommandMeta = {
   name: 'intake',
   summary: 'Turn a pasted ticket into a brief with criteria, checks and units',
-  usage: 'harness intake --from <file|-> [--repo <path>] [--unattended] [--json] | show [id] | answer <id> (--q <n> --answer "<text>" | --all-recommended) | lint [id] | list',
-  examples: ['harness intake --from ticket.txt', 'pbpaste | harness intake --from -', 'harness intake --from ticket.txt --unattended', 'harness intake show', 'harness intake answer t-1a2b3c4d5e --q 1 --answer B', 'harness intake answer t-1a2b3c4d5e --all-recommended'],
+  usage: 'harness intake (--from <file|-> | --jira <KEY>) [--repo <path>] [--unattended] [--json] | show [id] | answer <id> (--q <n> --answer "<text>" | --all-recommended) | lint [id] | list',
+  examples: ['harness intake --from ticket.txt', 'pbpaste | harness intake --from -', 'harness intake --jira SHOP-102', 'harness intake --from ticket.txt --unattended', 'harness intake show', 'harness intake answer t-1a2b3c4d5e --q 1 --answer B', 'harness intake answer t-1a2b3c4d5e --all-recommended'],
 };
 
 const MAX_TICKET_BYTES = 1024 * 1024;
@@ -277,21 +284,48 @@ export async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
-  const from = stdinDash ? '-' : (flagStr(p, 'from') || undefined) ?? (sub === 'from' ? p.positional[1] : undefined);
-  if (!from) {
+  const jiraKey = flagStr(p, 'jira');
+  if (p.flags.jira !== undefined && !jiraKey) {
+    process.stderr.write('--jira takes an issue key, for example: harness intake --jira SHOP-102\n');
+    return 2;
+  }
+  if (jiraKey && (p.flags.from !== undefined || stdinDash || sub === 'from')) {
+    process.stderr.write('Use --jira <KEY> or --from <file|->, not both.\n');
+    return 2;
+  }
+
+  const from = jiraKey ? undefined : stdinDash ? '-' : (flagStr(p, 'from') || undefined) ?? (sub === 'from' ? p.positional[1] : undefined);
+  if (!from && !jiraKey) {
     process.stderr.write(`usage: ${meta.usage}\n`);
     return 2;
   }
   let text: string;
-  if (from === '-') text = readStdin();
+  if (jiraKey) {
+    // Machine config only: a repository's own config must not be able to point the token at another host.
+    const got = await fetchJiraTicket(jiraKey, loadConfig()?.jira);
+    if (!got.ok) {
+      process.stderr.write(`${got.message}\n`);
+      return got.exit;
+    }
+    text = got.text;
+    const dest = path.join(inboxHome(), `${got.key}.txt`);
+    try {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, text);
+    } catch {
+      process.stderr.write(`Could not save the ticket to ${dest}.\n`);
+      return 1;
+    }
+    process.stderr.write(`Read ${got.key} from Jira; saved to ${dest}\n`);
+  } else if (from === '-') text = readStdin();
   else {
     try {
-      const st = fs.statSync(from);
+      const st = fs.statSync(from as string);
       if (st.size > MAX_TICKET_BYTES) {
         process.stderr.write(`The ticket file is larger than ${MAX_TICKET_BYTES} bytes; paste only the ticket.\n`);
         return 2;
       }
-      text = fs.readFileSync(from, 'utf8');
+      text = fs.readFileSync(from as string, 'utf8');
     } catch {
       process.stderr.write(`Cannot read ${from}. Pass a file, or - to read the ticket from stdin.\n`);
       return 2;
