@@ -319,14 +319,14 @@ before sharing it).
 
 ## Status of each agent
 
-Version 0.1.0. What was tested where the harness was built, and what only
+Version 0.4.1. What was tested where the harness was built, and what only
 your machine can confirm:
 
 | Agent | Tested here | You confirm |
 |---|---|---|
 | Claude Code | behaviour-tested: real headless `claude -p` sessions drive the hooks, the Stop gate, the install and the safety rails (test suites `test/behaviour`, `test/safety`, and the runner acceptance test) | nothing extra; `harness doctor` after install |
 | Codex | built from Codex's documentation and source; no Codex login was available, so no Codex session ran here. The safety suite feeds Codex-shaped hook payloads (including commands as argument arrays) to the hook process | the Codex self-check ([selfcheck/codex.md](selfcheck/codex.md)): hook trust, blocking, the Stop hook (on Codex a Stop block only re-prompts), the sandbox |
-| Devin desktop | built from Devin's documentation; Devin cannot run here, so no Devin session ran. The safety suite feeds hook payloads in Devin's documented format to the hook process | the Devin self-check ([selfcheck/devin-desktop.md](selfcheck/devin-desktop.md)): hook blocking, the field names hooks receive, Stop-hook timing and repeated blocks, Restricted and Bypass modes |
+| Devin desktop | built from Devin's documentation, then exercised through the Devin command-line tool (the same agent in print mode): a 15-step behaviour check and 24 lab runs drove the hooks, the `task` skill, the gate and the rails; the desktop app itself cannot run here. The safety suite feeds hook payloads in Devin's documented format to the hook process | the Devin self-check ([selfcheck/devin-desktop.md](selfcheck/devin-desktop.md)): the app's own hook blocking, the field names hooks receive, Stop-hook timing and repeated blocks, Restricted and Bypass modes (only steps 1 and 15 need the app) |
 | Others (Cursor, Copilot, Gemini) | not supported in this version | — |
 
 The recorded results of the safety suite are in [SAFETY.md](SAFETY.md); the

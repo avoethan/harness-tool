@@ -249,13 +249,15 @@ the visibility to public (Settings, General, Danger Zone).
 - Each release: bump the version in `harness/package.json`, add the
   `CHANGELOG.md` entry, commit, run `--check`, run `--publish`, run `--check`.
 
-**State today (2026-10-21).** The public repository is
-the publisher's `harness-tool` repository on GitHub. Its `main` is commit `5711077`,
-`harness 0.2.0`: the tree of `HEAD:harness` at development commit `4286051`,
-published by hand with option A (one root commit). The `v0.2.0` tag was not
-pushed, because the session proxy refuses tag pushes. The first script publish
-continues that history as a child commit; its `--tag` push may be refused for
-the same reason, in which case tag from a terminal.
+**State today (2026-10-21, evening).** The public repository is the
+publisher's `harness-tool` repository on GitHub. Its `main` holds three
+commits: `5711077` (`harness 0.2.0`, the tree of `HEAD:harness` at development
+commit `4286051`, published by hand with option A as the root commit),
+`e0d737d` (`harness 0.3.0`, from development commit `058a864`) and `481ba05`
+(`harness 0.4.0`, from development commit `5619c71`), the last two published
+with the script as child commits; `--check` reported the copy identical after
+each. No release tag has been pushed yet, because the session proxy refuses
+tag pushes; tag from a terminal or in the GitHub web interface when wanted.
 
 ## 6. After publishing
 

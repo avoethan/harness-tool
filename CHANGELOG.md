@@ -3,6 +3,10 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.4.1 (2026-10-21)
+
+- Docs only: the README status table says what the Devin command-line check and the 24 Devin lab runs exercised, and the publishing guide records the three published commits.
+
 ## 0.4.0 (2026-10-21)
 
 The user's second round of requests: a Jira queue and two user-run Jira writes, a cost cut for status-only API criteria, a tamper rule for changed expectations in existing tests, and a per-ticket digest.
