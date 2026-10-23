@@ -36,7 +36,7 @@ harness verify maintain [--add-missing | --add <id>,<id>] [--accept <id>,<id> | 
 | 0 | done; every assertion passed |
 | 1 | an assertion failed, a service is not ready, or a step failed (the output says which) |
 | 2 | usage (unknown route form, missing `--param`, bad flag value) |
-| 4 | refused by the database rail (empty or unsigned allowlist, a target not marked test, a query outside the run database) |
+| 4 | refused by the database rail (empty or unsigned allowlist, a target not marked test, a target marked read-only for launch, a query outside the run database, a statement that could write to a read-only database) |
 
 The spellings `--method --path --expect-status --expect-body --expect-header
 --repeat --expect-p95-ms`, `launch --db-unreachable` and `--table --expect-columns --expect-rows` are the ones
@@ -178,10 +178,20 @@ Only the run database, only through sqlcmd with `-Q`, parameterised with
 bracket-quoted. `--table` checks columns, row counts, expected rows (each
 must exist) and column values of the rows `--where` selects. `--query` is the
 agent's own read: one SELECT (or WITH ... SELECT), no `INTO`, no other
-database, no sqlcmd directives, no OPENROWSET and friends (else exit 4).
+database, no sqlcmd directives, no OPENROWSET and friends (else exit 4);
+the last check is the guard's read-only classifier (`src/guard/sqlreadonly.ts`),
+the same one the database rail applies to targets marked `read-only`, so a
+three-part column name (`dbo.t.col`) is refused too (write `t.col`).
 A recipe (`overlay.dbRecipes`) may change data (seed a test user, keyed by
 `{{runId}}`) but may not leave the run database. The artefact stores only
 the columns an assertion names (50 rows at most).
+
+If the user marks the run database `read-only` after launch (`harness db
+mark ... --read-only`), `verify db` still runs, but only reads: `--table` and
+`--query` as above, and a recipe only when the classifier proves its SQL
+reads; a recipe that changes data is refused with exit 4 and the reason
+"<db> is marked read-only: this statement could write (<word>); stop and ask
+the user to run it or approve it".
 
 ## Artefacts (the gate reads them)
 
@@ -271,6 +281,12 @@ The agent's own database commands go through the guard (src/guard/db.ts).
 - per-run databases need a server-wide test entry (an entry scoped to one
   database does not cover `test_<runId>`); a snapshot source must be marked
   test too; cleanup drops only `test_<runId>` of the run;
+- a target marked `read-only` is never created on, restored into, copied
+  from or seeded: `launch` refuses (exit 4, naming the mark) a snapshot
+  source or an `existing`-mode database marked read-only, and a per-run
+  database on a server marked read-only as a whole (its `master` is
+  read-only too). A test server that also holds a read-only database stays
+  usable for per-run databases;
 - the password is read from the variable `verify.db.passwordEnv` names
   (else `HARNESS_VERIFY_DB_PASSWORD`, `SQLCMDPASSWORD`, `DB_PASSWORD`,
   `MSSQL_SA_PASSWORD`) and passed to sqlcmd as `SQLCMDPASSWORD` in its

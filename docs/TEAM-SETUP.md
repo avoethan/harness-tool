@@ -27,15 +27,21 @@ If `node` is missing or older than 20, ask for it, or use the Windows zip of
 Node.js from nodejs.org unpacked into a folder in your user profile (no
 installer, no admin rights) and run `node` from there.
 
-Clone and build (no install scripts run, no admin rights needed):
+Clone (or download the zip of `main` from the repository page and unpack it into your user profile) and build; no install scripts run, no admin rights needed:
 
 ```powershell
 cd $HOME
 git clone <harness repository URL> harness-tool
 cd harness-tool            # the folder with package.json (go one level deeper if the repository holds it in a subfolder)
-npm ci --ignore-scripts
-npm run build
+npm.cmd ci --ignore-scripts
+npm.cmd run build
 ```
+
+Use `npm.cmd`, not `npm`: on machines where PowerShell scripts are disabled
+("running scripts is disabled on this system"), the `npm` wrapper is a
+PowerShell script and is refused, while `npm.cmd` is not. Nothing else in this
+guide runs a PowerShell script: the harness launcher is `harness.cmd` and the
+hooks call `node` directly. Later updates use `npm.cmd run build` too.
 
 Check that it runs, using the launcher that needs no PATH change:
 
@@ -120,9 +126,47 @@ needs permission to comment and to create issues in that project.
 
 ```powershell
 harness db list
-harness db mark --server <host[,port]> --test                       # every database on that server is test
-harness db mark --server <host[,port]> --database <name> --test     # only that database
+harness db mark --server <host[,port]> --test                            # every database on that server is test
+harness db mark --server <host[,port]> --database <name> --test          # only that database
+harness db mark --server <host[,port]> --database <name> --read-only     # the agent may read it, never change it
+harness db mark --server <host[,port]> --database <name> --not-test      # the agent may not touch it at all
 ```
+
+Three marks, one per entry:
+
+- **test**: the agent may read and write (create tables, seed rows, run
+  migrations). Use it for a throw-away or per-developer database.
+- **read-only**: the agent may run inline `SELECT` statements only
+  (`sqlcmd -S <server> -d <name> -Q "SELECT ..."`, `Invoke-Sqlcmd -Query`).
+  Anything else against it (an `INSERT`, `UPDATE`, `EXEC`, `SET`,
+  `DECLARE`, a script file, piped input, another database's three-part
+  name) is refused, and the agent is told to stop and ask you. Use it for
+  a shared database the team reads, such as a reporting or reference copy.
+- **not-test**: every database command against it is refused, reads too.
+
+The shared-server case: one SQL Server holds both a team database the agent
+may only read and a test database it may change. Mark the server test and
+the shared database read-only; the database entry wins over the server
+entry:
+
+```powershell
+harness db mark --server sql-shared,1433 --test
+harness db mark --server sql-shared,1433 --database reporting --read-only
+```
+
+On such a server the agent's commands against the test databases must
+stay inside them: a three-part name of another database, `USE`, dynamic
+SQL (`EXEC('...')`, `sp_executesql`), `sp_MSforeachdb` and similar
+system procedures are refused, and so is a command that names no database
+(`-d`), because the login's default database could be the read-only one.
+Mark the server under one name only (not both its host name and its IP).
+
+`harness verify` never creates, restores, copies from or seeds a read-only
+database. With `verify.db.mode existing` (the services run against a
+database as it is, instead of a per-run copy), that database must be marked
+test; a read-only one is refused with exit 4. To read a read-only database
+in an end-to-end check, use `harness verify db --query "SELECT ..."` against
+a run on a test server.
 
 With nothing marked, every database command an agent tries is refused, and
 `harness verify` cannot start a test database. That is safe, but the
@@ -190,8 +234,12 @@ Then a quick rail check in each agent: ask it, in its chat,
 Run git push --force in this repository.
 ```
 
-It must be refused with a message from the harness. Run `harness doctor`
-again: it now shows that agent's heartbeat.
+It should be refused. The agent may refuse on its own (its instructions forbid
+force-pushes), so run `harness doctor` again to see whether the hooks reach
+the harness: a line `hooks-seen-<agent>` reports the last hook event from that
+agent and when the guard last checked one of its tool calls. A warning there
+after you used the agent means its hooks are not firing; for Devin, check
+that the folder is trusted (hooks do not run in Restricted Mode).
 
 Then the step-by-step self-check pages. They confirm, on your machine, the
 agent behaviours the harness relies on (each step says what to do, what to

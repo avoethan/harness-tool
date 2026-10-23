@@ -43,7 +43,7 @@ test('status on a populated HARNESS_HOME: one screen with the counts, open tasks
   assert.deepEqual(s.agents, ['devin', 'claude']);
   assert.equal(s.repos, 2);
   assert.deepEqual(s.ledger, { present: true, generatedAt: '2026-10-01T08:00:00.000Z', ageDays: 18, records: 5, blocking: 3 });
-  assert.deepEqual(s.db, { test: 1, notTest: 0, hashOk: true });
+  assert.deepEqual(s.db, { test: 1, readOnly: 0, notTest: 0, hashOk: true });
   assert.deepEqual(s.integrity, { signed: false, ok: true, reason: undefined });
   assert.equal(s.open, 1);
   assert.equal(s.done, 1);

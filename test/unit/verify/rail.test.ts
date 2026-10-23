@@ -99,7 +99,9 @@ test('agent queries are one read-only SELECT on the run database; recipes may no
   const db = 'test_abc123';
   assert.equal(checkSelectOnly('SELECT id, status FROM dbo.orders WHERE id = @id', db), null);
   assert.equal(checkSelectOnly("WITH x AS (SELECT 1 AS a) SELECT a FROM x;", db), null);
-  assert.equal(checkSelectOnly("SELECT ';' AS s, dbo.orders.id FROM dbo.orders", db), null);
+  assert.equal(checkSelectOnly("SELECT ';' AS s, o.id FROM dbo.orders o", db), null);
+  // The guard's read-only classifier has the last word: a three-part column name reads like another database.
+  assert.match(checkSelectOnly("SELECT ';' AS s, dbo.orders.id FROM dbo.orders", db) ?? '', /three-part name/);
   assert.match(checkSelectOnly('DELETE FROM dbo.orders', db) ?? '', /only a SELECT/);
   assert.match(checkSelectOnly('SELECT 1; DROP TABLE dbo.orders', db) ?? '', /one statement/);
   assert.match(checkSelectOnly('SELECT name FROM master.sys.databases', db) ?? '', /another database/);

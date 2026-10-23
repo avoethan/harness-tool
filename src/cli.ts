@@ -36,7 +36,7 @@ export const COMMANDS: Array<[string, string, string]> = [
   ['apply', 'apply', 'Apply a plan with backup and a manifest'],
   ['undo', 'undo', 'Restore the files a plan changed'],
   ['uninstall', 'uninstall', 'Undo everything the manifest owns'],
-  ['db', 'db', 'Mark databases as test / not-test (the safety allowlist)'],
+  ['db', 'db', 'Mark databases as test / read-only / not-test (the safety allowlist)'],
   ['config', 'config', 'Read or change harness settings from an interactive terminal'],
   ['gate', 'gate', 'Run the done-gate and write evidence'],
   ['phase', 'phase', 'Enter the implement or tests phase for the current task'],

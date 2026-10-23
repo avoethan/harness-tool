@@ -266,6 +266,114 @@ test('db rail: harness verify refuses to start or check anything against an empt
   }
 });
 
+const RO_SERVER = 'sqlro.example.invalid';
+const RO = `sqlcmd -S ${RO_SERVER} -d reports`;
+
+/** Read-only target: only inline SQL the classifier proves reads. */
+const RO_ALLOW: Array<{ label: string; cmd: string }> = [
+  { label: 'SELECT TOP', cmd: `${RO} -Q "SELECT TOP 5 * FROM dbo.t"` },
+  { label: 'WITH ... SELECT', cmd: `${RO} -Q "WITH x AS (SELECT 1 a) SELECT a FROM x"` },
+  { label: 'a literal holding the word delete', cmd: `${RO} -Q "SELECT id FROM dbo.t WHERE note = 'delete me'"` },
+  { label: 'a three-part name of the marked database', cmd: `${RO} -Q "SELECT * FROM reports.dbo.t"` },
+  { label: 'Invoke-Sqlcmd -Query', cmd: `Invoke-Sqlcmd -ServerInstance ${RO_SERVER} -Database reports -Query 'SELECT 1'` },
+  { label: 'the test server keeps writes', cmd: `sqlcmd -S ${TEST_SERVER} -d app_test -Q "DELETE FROM dbo.t"` },
+];
+const RO_DENY: Array<{ label: string; cmd: string }> = [
+  { label: 'DELETE', cmd: `${RO} -Q "DELETE FROM dbo.t"` },
+  { label: 'UPDATE', cmd: `${RO} -Q "UPDATE dbo.t SET a = 1"` },
+  { label: 'INSERT', cmd: `${RO} -Q "INSERT INTO dbo.t VALUES (1)"` },
+  { label: 'SELECT ... INTO', cmd: `${RO} -Q "SELECT a INTO dbo.copy FROM dbo.t"` },
+  { label: 'SELECT then DELETE', cmd: `${RO} -Q "SELECT 1; DELETE FROM t"` },
+  { label: 'GO then UPDATE', cmd: `${RO} -Q "SELECT 1\nGO\nUPDATE t SET a = 1"` },
+  { label: 'comment-split keyword', cmd: `${RO} -Q "SEL/**/ECT 1"` },
+  { label: '-i script', cmd: `${RO} -i report.sql` },
+  { label: 'piped input', cmd: `cat report.sql | ${RO}` },
+  { label: 'heredoc', cmd: `${RO} <<'EOF'\nSELECT 1\nEOF` },
+  { label: 'another database (three-part)', cmd: `${RO} -Q "SELECT * FROM otherdb.dbo.t"` },
+  { label: 'linked server (four-part)', cmd: `${RO} -Q "SELECT * FROM srv.reports.dbo.t"` },
+  { label: ':connect', cmd: `${RO} -Q ":connect ${PROD}"` },
+  { label: 'EXEC sp_who', cmd: `${RO} -Q "EXEC sp_who"` },
+  { label: 'DECLARE + EXEC', cmd: `${RO} -Q "DECLARE @s nvarchar(max)='DELETE FROM t'; EXEC(@s)"` },
+  { label: 'sqlcmd variable', cmd: `${RO} -Q 'SELECT $(x)' -v x="1; DELETE FROM t"` },
+  { label: 'query from a variable', cmd: `${RO} -Q "$Q"` },
+  { label: 'Invoke-Sqlcmd -InputFile', cmd: `Invoke-Sqlcmd -ServerInstance ${RO_SERVER} -Database reports -InputFile report.sql` },
+  { label: 'bcp in', cmd: `bcp dbo.t in t.dat -S ${RO_SERVER} -d reports -T -c` },
+  { label: 'mixed test + read-only with a write', cmd: `SQLCMDSERVER=${TEST_SERVER} ${RO} -Q "DELETE FROM t"` },
+  { label: 'not-test still denies reads', cmd: `sqlcmd -S ${PROD} -Q "SELECT 1"` },
+];
+
+test('db rail: a database marked read-only accepts only inline reads through the hook for Claude, Codex and Devin; verify never launches on it', (t) => {
+  const nb = built();
+  if (nb) return t.skip(nb);
+  const sb = sandbox('dbro');
+  try {
+    const repo = initRepo(
+      path.join(sb.tmp, 'svc'),
+      {
+        'package.json': JSON.stringify({ name: 'svc', private: true, scripts: { dev: 'node server.js' } }, null, 2) + '\n',
+        'server.js': "require('http').createServer((q, s) => s.end('ok')).listen(Number(process.env.PORT) || 0);\n",
+        'migrations/0001_init.sql': 'CREATE TABLE t (id int);\n',
+        'report.sql': 'DELETE FROM dbo.t;\n',
+      },
+      sb.env,
+    );
+    markTest(sb, TEST_SERVER);
+    for (const [server, database, flag] of [[RO_SERVER, 'reports', '--read-only'], [PROD, undefined, '--not-test']] as Array<[string, string | undefined, string]>) {
+      const m = cli(sb, ['db', 'mark', '--server', server, ...(database ? ['--database', database] : []), flag], sb.tmp);
+      assert.equal(m.code, 0, m.stderr);
+    }
+    const list = cli(sb, ['db', 'list'], sb.tmp);
+    assert.match(list.stdout, new RegExp(`${RO_SERVER.replace(/\./g, '\\.')}\\s+reports\\s+read-only`));
+    const misses: string[] = [];
+    let denies = 0;
+    let allows = 0;
+    for (const d of DIALECTS) {
+      for (const c of RO_DENY) {
+        const r = preShell(sb, d, c.cmd, repo);
+        if (!r.denied) misses.push(`${d}: DENY expected for ${c.label} -> exit ${r.code}`);
+        else denies++;
+      }
+      for (const c of RO_ALLOW) {
+        const r = preShell(sb, d, c.cmd, repo);
+        if (r.code !== 0) misses.push(`${d}: ALLOW expected for ${c.label} -> ${r.reason.slice(0, 160)}`);
+        else allows++;
+      }
+      const w = preShell(sb, d, `${RO} -Q "SELECT secret_col FROM dbo.t; DELETE FROM dbo.t"`, repo);
+      if (!/is marked read-only: this statement could write \(DELETE\); stop and ask the user/.test(w.reason) || /secret_col/.test(w.reason)) misses.push(`${d}: reason ${w.reason.slice(0, 160)}`);
+      if (d === 'codex') {
+        for (const [argv, want] of [[['sqlcmd', '-S', RO_SERVER, '-d', 'reports', '-Q', 'SELECT 1'], 0], [['sqlcmd', '-S', RO_SERVER, '-d', 'reports', '-Q', 'DELETE FROM t'], 2]] as Array<[string[], number]>) {
+          const r = hook(sb, 'PreToolUse', { session_id: sid('argv'), cwd: repo, tool_name: 'local_shell', tool_input: { command: argv } }, d, { cwd: repo });
+          if ((want === 0) !== (r.code === 0)) misses.push(`codex argv ${argv.join(' ')} -> exit ${r.code}`);
+          else if (want === 0) allows++;
+          else denies++;
+        }
+      }
+    }
+    report(t, `read-only via hook process: ${denies} denied, ${allows} allowed, ${misses.length} wrong (dialects ${DIALECTS.join('/')}, ${RO_DENY.length} deny cases, ${RO_ALLOW.length} allow cases each, +2 Codex argv)`);
+    assert.deepEqual(misses, []);
+    // verify: an existing-mode database marked read-only is refused before anything starts (exit 4, naming the mark).
+    const cfgPath = path.join(sb.home, 'config.json');
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    cfg.verify = { db: { server: RO_SERVER, mode: 'existing', database: 'reports', sqlcmd: 'local', sqlcmdPath: '/bin/false' } };
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    configSet(sb, 'caps.turns', '80');
+    const l = cli(sb, ['verify', 'launch'], repo);
+    assert.equal(l.code, 4, `launch on a read-only database: ${l.stdout}${l.stderr}`);
+    assert.match(l.stdout + l.stderr, /read-only/);
+    // An unsigned list (a hand edit turning the not-test entry read-only, integrity re-signed): reads are denied too.
+    cfg.db.allowlist = cfg.db.allowlist.map((e: { server: string; marked: string }) => (e.server === PROD ? { ...e, marked: 'read-only' } : e));
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    configSet(sb, 'caps.turns', '81');
+    for (const d of DIALECTS) {
+      const r = preShell(sb, d, `sqlcmd -S ${PROD} -Q "SELECT 1"`, repo);
+      assert.ok(r.denied && /not signed|harness db mark/.test(r.reason), `${d}: unsigned read-only list -> ${r.code} ${r.reason.slice(0, 120)}`);
+    }
+    report(t, `read-only verify: launch(existing read-only)=${l.code}; unsigned read-only list denied for ${DIALECTS.length} dialects`);
+  } finally {
+    sb.cleanup();
+  }
+});
+
 test('db rail (behaviour, Claude Code): claude -p is denied sqlcmd against an unmarked server, through an env assignment and through bash -c', (t) => {
   const nb = built() ?? behaviourSkipReason();
   if (nb) return t.skip(nb);

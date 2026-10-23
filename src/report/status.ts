@@ -34,7 +34,7 @@ export interface StatusInfo {
   workspaceRoot?: string;
   repos: number;
   ledger: { present: boolean; generatedAt?: string; ageDays?: number; records: number; blocking: number };
-  db: { test: number; notTest: number; hashOk: boolean | null };
+  db: { test: number; readOnly: number; notTest: number; hashOk: boolean | null };
   integrity: { signed: boolean; ok: boolean; reason?: string };
   tasks: StatusTask[];
   open: number;
@@ -98,6 +98,7 @@ export function buildStatus(st: HarnessState, now: Date = new Date()): StatusInf
   const allow = c?.db?.allowlist ?? [];
   const db = {
     test: allow.filter((t) => t.marked === 'test').length,
+    readOnly: allow.filter((t) => t.marked === 'read-only').length,
     notTest: allow.filter((t) => t.marked === 'not-test').length,
     hashOk: c && c.db?.markedHash ? allowlistHash(c) === c.db.markedHash : null,
   };
@@ -160,7 +161,7 @@ export function renderStatus(s: StatusInfo): string {
     L.push(`  Workspace    ${s.workspaceRoot ?? 'not set'} (${s.repos} repo${s.repos === 1 ? '' : 's'})`);
   }
   L.push(`  Ledger       ${s.ledger.present ? `${s.ledger.records} standard(s), ${s.ledger.blocking} blocking; discovered ${age(s.ledger.ageDays)}` : 'none yet'}`);
-  if (s.installed) L.push(`  Databases    ${s.db.test} marked test, ${s.db.notTest} marked not test${s.db.hashOk === false ? '; allowlist edited outside `harness db mark`' : s.db.hashOk ? '; allowlist intact' : ''}`);
+  if (s.installed) L.push(`  Databases    ${s.db.test} marked test, ${s.db.readOnly ? `${s.db.readOnly} read-only, ` : ''}${s.db.notTest} marked not test${s.db.hashOk === false ? '; allowlist edited outside `harness db mark`' : s.db.hashOk ? '; allowlist intact' : ''}`);
   L.push(`  Integrity    ${s.integrity.ok ? (s.integrity.signed ? 'ok' : 'not signed yet (install signs it)') : `FAILS: ${s.integrity.reason}`}`);
   L.push(`  Tasks        ${s.open} open, ${s.done} passed the gate`);
   for (const t of s.tasks.filter((x) => x.verdict !== 'PASS').slice(0, MAX_TASKS)) {

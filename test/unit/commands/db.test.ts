@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { main, markTarget, normaliseServer, unmarkTarget, validateServer, candidatesPath } from '../../../src/commands/db';
+import { main, markTarget, normaliseServer, unmarkTarget, validateServer, candidatesPath, interactiveMark, MARK_CHOICES } from '../../../src/commands/db';
 import { allowlistHash, defaultConfig, loadConfig } from '../../../src/lib/config';
 import { capture, withTty } from './capture';
 import { tempHome, write, type TempHome } from '../lifecycle/helpers';
@@ -65,7 +65,7 @@ test('mark refuses connection strings, credentials and URLs; needs --test or --n
   }
   const r = await capture(() => main(['mark', '--server', 'host']));
   assert.equal(r.code, 2);
-  assert.match(r.stderr, /--test or --not-test/);
+  assert.match(r.stderr, /--test, --read-only or --not-test/);
   const both = await capture(() => main(['mark', '--server', 'host', '--test', '--not-test']));
   assert.equal(both.code, 2);
   assert.equal(validateServer('db.example.test,1433'), null);
@@ -110,4 +110,56 @@ test('interactive marking needs a terminal; without one it says which flags to u
     assert.equal(r.code, 2);
     assert.match(r.stderr, /no terminal to ask in/);
   });
+});
+
+test('mark --read-only: stored, signed, listed; one mark flag only (exit 2 on two); a server-wide mark gets a note', async () => {
+  const r = await capture(() => main(['mark', '--server', 'sql-shared', '--database', 'reporting', '--read-only']));
+  assert.equal(r.code, 0, r.stderr);
+  assert.match(r.stdout, /Marked sql-shared reporting as read-only/);
+  const c = loadConfig()!;
+  const e = c.db.allowlist.find((x) => x.server === 'sql-shared');
+  assert.deepEqual(e, { server: 'sql-shared', database: 'reporting', marked: 'read-only' });
+  assert.equal(c.db.markedHash, allowlistHash(c), 'the signature covers the new value');
+  const list = await capture(() => main(['list']));
+  assert.match(list.stdout, /sql-shared\s+reporting\s+read-only/);
+  assert.match(list.stdout, /read-only: the agent may run only inline SELECT statements/);
+  for (const pair of [['--test', '--read-only'], ['--read-only', '--not-test'], ['--test', '--not-test'], ['--test', '--read-only', '--not-test']]) {
+    const two = await capture(() => main(['mark', '--server', 'sql-shared', '--database', 'reporting', ...pair]));
+    assert.equal(two.code, 2, pair.join(' '));
+    assert.match(two.stderr, /only one of --test, --read-only or --not-test/);
+  }
+  const none = await capture(() => main(['mark', '--server', 'sql-shared']));
+  assert.equal(none.code, 2);
+  assert.match(none.stderr, /--test, --read-only or --not-test/);
+  const wide = await capture(() => main(['mark', '--server', 'ro-wide', '--read-only']));
+  assert.equal(wide.code, 0);
+  assert.match(wide.stdout, /server-wide read-only mark covers every database/);
+  // unmark is unchanged
+  assert.equal((await capture(() => main(['unmark', '--server', 'ro-wide']))).code, 0);
+  assert.equal((await capture(() => main(['unmark', '--server', 'sql-shared', '--database', 'reporting']))).code, 0);
+  assert.equal(loadConfig()!.db.allowlist.some((x) => x.marked === 'read-only'), false);
+});
+
+test('interactive marking offers test / read-only / not-test / skip and stores the answer', async () => {
+  write(candidatesPath(), JSON.stringify({ version: 1, candidates: [{ server: 'cand-ro', database: 'facts' }, { server: 'cand-skip' }] }));
+  const asked: string[][] = [];
+  const answers = ['read-only', 'skip'];
+  const r = await capture(() =>
+    interactiveMark(
+      false,
+      [],
+      async (_q, choices) => {
+        asked.push(choices);
+        return answers.shift() ?? 'skip';
+      },
+      () => true,
+    ),
+  );
+  assert.equal(r.code, 0, r.stderr);
+  assert.deepEqual(asked[0], ['test', 'read-only', 'not-test', 'skip']);
+  assert.deepEqual(MARK_CHOICES, ['test', 'read-only', 'not-test', 'skip']);
+  const c = loadConfig()!;
+  assert.deepEqual(c.db.allowlist.find((x) => x.server === 'cand-ro'), { server: 'cand-ro', database: 'facts', marked: 'read-only' });
+  assert.equal(c.db.allowlist.some((x) => x.server === 'cand-skip'), false);
+  assert.equal(c.db.markedHash, allowlistHash(c));
 });

@@ -9,7 +9,9 @@
  * The DB rail applies to the harness's own access too: before any call, the
  * equivalent command line (what the agent would type) is parsed by the
  * guard (src/guard/parse + src/guard/db) and must resolve to targets the
- * user marked `test`; an empty or unsigned allowlist refuses everything.
+ * user marked `test`; an empty or unsigned allowlist refuses everything. A
+ * target marked `read-only` is never created, restored, copied or seeded;
+ * only `verify db` may read it, through the guard's read-only classifier.
  */
 import * as fs from 'node:fs';
 import type { DbConfig, VerifyConfig } from '../types';
@@ -17,6 +19,7 @@ import { run, which, type ExecResult } from '../lib/exec';
 import { redactText } from '../lib/redact';
 import { allSegments, parseCommand } from '../guard/parse';
 import { allowlistSigned, evaluateDbSegment, MARK_INSTRUCTION, matchAllowlist, parseServerSpec } from '../guard/db';
+import { classifyReadOnlySql } from '../guard/sqlreadonly';
 
 export const DEFAULT_CONTAINER_SQLCMD = '/opt/mssql-tools18/bin/sqlcmd';
 export const SQL_SERVER_IMAGE_RE = /(mssql\/server|azure-sql-edge|sql-?server)/i;
@@ -162,6 +165,13 @@ export function displayCommand(t: Transport, database: string, login: DbLogin, q
 export interface RailCheck {
   ok: boolean;
   reason: string;
+  /** The target is marked read-only (only with allowReadOnly): the caller may only read. */
+  readOnly?: boolean;
+}
+
+export interface RailOptions {
+  /** Accept a target marked read-only (verify db's reads); the default refuses it. */
+  allowReadOnly?: boolean;
 }
 
 /** Refuse when the allowlist is empty or unsigned (the guard's own preconditions). */
@@ -184,14 +194,14 @@ export function allowlistReady(db: DbConfig): RailCheck {
  * entry marked test for this database also covers the harness's own call.
  * The agent's own commands are still judged by the guard as typed.
  */
-export function guardCheck(t: Transport, database: string, login: DbLogin, db: DbConfig, container?: ContainerInfo): RailCheck {
+export function guardCheck(t: Transport, database: string, login: DbLogin, db: DbConfig, container?: ContainerInfo, opts: RailOptions = {}): RailCheck {
   const ready = allowlistReady(db);
   if (!ready.ok) return ready;
   const line = shellQuote(sqlcmdArgv(t, database, login, { query: 'SELECT 1' }));
   const parsed = parseCommand(line, { dialect: 'posix' });
   let seen = false;
   for (const seg of allSegments(parsed)) {
-    const d = evaluateDbSegment(seg, {}, db);
+    const d = evaluateDbSegment(seg, {}, db, undefined, { requireTest: !opts.allowReadOnly });
     if (!d) continue;
     seen = true;
     if (d.decision === 'deny') {
@@ -216,13 +226,15 @@ function publishedPortMarked(container: ContainerInfo, database: string, db: DbC
 }
 
 /** Whether the server the services connect to is a marked test target (directly, or as the marked container's published port). */
-export function serviceServerCheck(server: string, database: string, db: DbConfig, container?: ContainerInfo): RailCheck {
+export function serviceServerCheck(server: string, database: string, db: DbConfig, container?: ContainerInfo, opts: RailOptions = {}): RailCheck {
   const ready = allowlistReady(db);
   if (!ready.ok) return ready;
   const sp = parseServerSpec(server);
   if (!sp) return { ok: false, reason: `the server "${server.slice(0, 60)}" is not a host[,port] name` };
   const m = matchAllowlist({ ...sp, database, source: 'verify' }, db.allowlist, 'mssql');
   if (m.ok) return { ok: true, reason: `${server} is marked test` };
+  if (m.why === 'read-only' && opts.allowReadOnly) return { ok: true, readOnly: true, reason: `${server}/${database} is marked read-only (reads only)` };
+  if (m.why === 'read-only') return { ok: false, reason: `${server}/${database} is marked read-only (${m.entry?.database ? `the entry ${m.entry.server}/${m.entry.database}` : `the server-wide entry ${m.entry?.server ?? server}`}): harness verify never creates, restores, copies from or seeds a read-only database; use a server or database marked test, or ask the user to mark it test with \`harness db mark\`.` };
   if (container && sp.host === 'localhost' && sp.port && container.hostPorts.includes(sp.port)) {
     const mc = matchAllowlist({ host: container.name.toLowerCase(), database, source: 'container' }, db.allowlist, 'mssql');
     if (mc.ok) return { ok: true, reason: `${server} is the published port of the container ${container.name}, which is marked test` };
@@ -259,7 +271,11 @@ function crossDatabase(code: string, runDb: string): string | null {
   return null;
 }
 
-/** Agent-supplied --query: one read-only SELECT against the run database. */
+/**
+ * Agent-supplied --query: one read-only SELECT against the run database. The
+ * checks below keep their plain messages; the guard's read-only classifier
+ * (the same one the database rail applies to read-only targets) has the last word.
+ */
 export function checkSelectOnly(sql: string, runDb: string): string | null {
   if (DIRECTIVE_RE.test(sql)) return 'sqlcmd directives (:r, :connect, !!) are not allowed in a query';
   const code = stripSqlLiterals(sql).trim().replace(/;\s*$/, '');
@@ -271,7 +287,15 @@ export function checkSelectOnly(sql: string, runDb: string): string | null {
   if (DANGER_RE.test(code)) return `the query uses ${DANGER_RE.exec(code)?.[0]}, which reaches outside the run database`;
   const x = crossDatabase(code, runDb);
   if (x) return `the query names another database (${x}); it may read only ${runDb}`;
+  const v = classifyReadOnlySql(sql, { databases: [runDb] });
+  if (!v.ok) return `the query could write or reach outside ${runDb} (${v.word}); --query takes one read-only SELECT`;
   return null;
+}
+
+/** A recipe or query against a database marked read-only: refused unless the classifier proves it reads. */
+export function checkReadOnlyTarget(sql: string, database: string): string | null {
+  const v = classifyReadOnlySql(sql, { databases: [database] });
+  return v.ok ? null : `${database} is marked read-only: this statement could write (${v.word}); stop and ask the user to run it or approve it`;
 }
 
 /** Hand-written recipe SQL: data statements allowed, nothing that leaves the run database. */

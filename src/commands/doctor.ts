@@ -24,7 +24,7 @@ import { exists, isDir, isFile, readJsonOr, readTextOr } from '../lib/fsx';
 import { remotes, rawGit } from '../lib/git';
 import { integrityPath, verifyIntegrity } from '../lib/integrity';
 import { tryParseJsonc } from '../lib/jsonc';
-import { agentHome, configPath, harnessHome, hookEntryPath, isWindows, packageRoot, stateDir, toPosix } from '../lib/paths';
+import { agentHome, configPath, harnessHome, hookEntryPath, isWindows, logsDir, packageRoot, stateDir, toPosix } from '../lib/paths';
 
 export const meta: CommandMeta = {
   name: 'doctor',
@@ -146,6 +146,8 @@ function checkDb(c: HarnessConfig | null): Check {
   if (c!.db.markedHash !== live) return { name: 'db-allowlist', status: 'fail', message: 'the allowlist was edited outside `harness db mark` (hash mismatch); every database command is denied', fix: 're-mark the entries with `harness db mark` to refresh the hash' };
   const entries = list.map((x) => `${x.server}${x.database ? `/${x.database}` : ''}=${x.marked}`).join(', ');
   const tests = list.filter((x) => x.marked === 'test').length;
+  const readOnly = list.filter((x) => x.marked === 'read-only').length;
+  if (!tests && readOnly) return { name: 'db-allowlist', status: 'warn', message: `${entries}: no server is marked test, so only inline reads of the read-only entries are allowed`, fix: 'harness db mark --server <host[,port]> --test' };
   return tests
     ? { name: 'db-allowlist', status: 'ok', message: `${entries} (hash ${live.slice(0, 12)})` }
     : { name: 'db-allowlist', status: 'warn', message: `${entries}: no server is marked test, so every database command is denied`, fix: 'harness db mark --server <host[,port]> --test' };
@@ -268,6 +270,34 @@ function checkCodexHeartbeat(c: HarnessConfig | null): Check | null {
   return { name: 'codex-hooks-trusted', status: 'warn', message: 'no Codex session has run the harness SessionStart hook yet (Codex skips hooks until they are trusted)', fix: 'open Codex, run /hooks and trust the harness hook entries, then start a new session' };
 }
 
+/**
+ * The last hook event seen from each configured agent, read from the instrumentation log (event names and
+ * times only). Proves the agent's hooks reach the harness; a guard decision (`guard.allow` / `guard.deny`)
+ * means the guard checked that agent's tool calls.
+ */
+export function checkHooksSeen(c: HarnessConfig | null, logFile = path.join(logsDir(), 'events.jsonl')): Check[] {
+  const agents = c?.agents ?? ALL_AGENTS;
+  const last: Partial<Record<AgentId, { at: string; guard?: string }>> = {};
+  const text = readTextOr(logFile, '') ?? '';
+  for (const line of text.split('\n')) {
+    if (!line.includes('"agent"')) continue;
+    let e: { ts?: string; event?: string; agent?: AgentId } | null = null;
+    try { e = JSON.parse(line); } catch { continue; }
+    if (!e || !e.agent || !e.ts || !agents.includes(e.agent)) continue;
+    const cur = last[e.agent] ?? { at: e.ts };
+    if (e.ts >= cur.at) cur.at = e.ts;
+    if (e.event === 'guard.allow' || e.event === 'guard.deny') cur.guard = e.ts > (cur.guard ?? '') ? e.ts : cur.guard;
+    last[e.agent] = cur;
+  }
+  return agents.map((a): Check => {
+    const l = last[a];
+    if (!l) return { name: `hooks-seen-${a}`, status: 'warn', message: `no hook event from ${a} yet`, fix: `open ${a} in the workspace (trust the folder) and run any command; then run harness doctor again` };
+    return l.guard
+      ? { name: `hooks-seen-${a}`, status: 'ok', message: `${a}: last hook event ${l.at}; the guard last checked one of its tool calls at ${l.guard}` }
+      : { name: `hooks-seen-${a}`, status: 'warn', message: `${a}: hook events arrive (last ${l.at}) but the guard has not checked a tool call yet`, fix: `ask ${a} to run a harmless command such as git status, then run harness doctor again` };
+  });
+}
+
 // ---------------------------------------------------------------------------
 
 export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport> {
@@ -290,6 +320,7 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
   add(checkHooks(c));
   add(checkStateRepo(!!opts.fix));
   add(checkCodexHeartbeat(c));
+  add(checkHooksSeen(c));
   const summary = { ok: 0, warn: 0, fail: 0 };
   for (const x of checks) summary[x.status]++;
   return { version: harnessVersion(), ok: summary.fail === 0, checks, summary };

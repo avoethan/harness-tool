@@ -270,6 +270,8 @@ harness verify cleanup         # stop services, drop the run database; the evide
   at a database by hand.
 - Database commands reach only targets the user marked as test. A denied
   database command is a rail, not a bug: do not retry it another way.
+- On a database marked read-only, run only a `SELECT`, inline (`sqlcmd -Q`);
+  for any change, stop and ask the user.
 - An artefact is fresh only for the exact code that produced it. Change the
   code, and you must drive the check again.
 - Manual checks (`ui-artifact`, measurements): produce the named artefact and

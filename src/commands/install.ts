@@ -131,7 +131,7 @@ export async function main(argv: string[]): Promise<number> {
   for (const raw of flagValues(a, 'reject')) {
     const r = parseReject(raw);
     if (!r) return usage(`--reject ${raw}: expected <check>:<path>`);
-    rejects.push({ ...r, raw });
+    rejects.push({ ...r, path: resolveRejectPath(r.path, workspace), raw });
   }
   if (!yes && !isInteractive()) return usage('install changes your agent configuration: run it in a terminal, or pass --yes (with --db-test <host[,port]> for each test database, or --db-none)');
 
@@ -282,4 +282,10 @@ function finish(o: Out, setting: Setting, agents: AgentId[], workspace: string, 
   say(o, '  Self-check: run `harness doctor`; then ask each agent to run `git push --force` (it must be refused) and run `harness doctor` again to see its heartbeat.');
   if (planId) say(o, `  Undo: \`harness undo --plan ${planId}\` restores every file; \`harness uninstall\` removes everything the harness owns.`);
   say(o, `  Workspace: ${workspace}`);
+}
+
+/** A `--reject` path relative to the workspace (`.devin/workflows/x.md`) or starting with `~` names the file the plan lists by its full path. */
+export function resolveRejectPath(p: string, workspace: string): string {
+  const e = expandHome(p);
+  return path.isAbsolute(e) ? path.normalize(e) : path.resolve(workspace, e);
 }

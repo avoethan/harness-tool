@@ -3,6 +3,21 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.5.0 (2026-10-23)
+
+From the first work-machine setup: a read-only database mark, a per-agent hook check in doctor, and setup fixes.
+
+- `harness doctor` reports, per configured agent, the last hook event seen and when the guard last checked one of its tool calls (`hooks-seen-<agent>`); the team guide says how to read it instead of a heartbeat only Codex had.
+- `harness install --reject` accepts a path relative to the workspace (`.devin/workflows/x.md`) or starting with `~`, not only the full path the plan prints.
+- Team guide: use `npm.cmd` on Windows, where disabled PowerShell scripts refuse the `npm` wrapper; the zip download is named as an alternative to cloning.
+- A third database mark, `read-only`: `harness db mark --server <host[,port]> --database <name> --read-only` (exactly one of `--test`, `--read-only`, `--not-test`, else exit 2; a database-scoped mark is the normal use). The interactive prompt offers test / read-only / not-test / skip, `harness db list` shows the mark, and the allowlist signature covers it.
+- Database rail: on a read-only target the agent may run only inline SQL (`sqlcmd`/`osql`/`isql`/`mssql-cli -Q`, `Invoke-Sqlcmd`/`Invoke-DbaQuery -Query`, a here-string) that the new read-only classifier (`src/guard/sqlreadonly.ts`) proves reads: every statement starts with SELECT or WITH, no write or control word, no `sp_`/`xp_`, no sqlcmd directive or variable, no other database or linked server, ASCII only. Anything else is denied with "<db> is marked read-only: this statement could write (<word>); stop and ask the user to run it or approve it". A command mixing test and read-only targets follows the read-only rule.
+- Database rail: a database entry now beats a server-wide entry, the strictest mark wins within a scope, and a target without a database takes the read-only or not-test marks of its server's databases (the login's default database may be one of them). Before, the first matching test entry won.
+- Database rail: a test target on a server that also holds read-only or not-test databases, or matched by a database-scoped test entry, may not reach other databases (three- and four-part names, the protected database's name, dynamic SQL, `sp_MSforeachdb` and other system procedures, DBCC, assemblies); `bcp` there is refused.
+- Database rail, all marks: `xargs` arguments to a database client and a flag taken as another flag's value (`-h -i x.sql`) are refused; sqlcmd's `-C` no longer swallows the next argument, and `-K` takes one.
+- `harness verify` never creates on, restores into, copies from or seeds a read-only database (exit 4 naming the mark); `verify db` on a run database re-marked read-only only reads, and refuses a recipe that writes. `verify db --query` ends with the same classifier, so a three-part column name (`dbo.t.col`) is now refused.
+- The task skill says: on a read-only database run only SELECT inline; for any change, stop and ask the user. The always-on file and the session index list read-only targets.
+
 ## 0.4.1 (2026-10-21)
 
 - Docs only: the README status table says what the Devin command-line check and the 24 Devin lab runs exercised, and the publishing guide records the three published commits.

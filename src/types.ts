@@ -146,9 +146,14 @@ export interface DbConfig {
 export interface DbTarget {
   /** Hostname or host,port exactly as a client would be given it (case-insensitive). */
   server: string;
-  /** Optional database name; absent means every database on that server is allowed. */
+  /** Optional database name; absent means the mark covers every database on that server. */
   database?: string;
-  marked: 'test' | 'not-test';
+  /**
+   * `test`: the agent may read and write. `read-only`: the agent may run only
+   * inline SQL that the guard proves reads (src/guard/sqlreadonly.ts).
+   * `not-test`: every database command is denied.
+   */
+  marked: 'test' | 'read-only' | 'not-test';
 }
 
 export interface GateConfig {

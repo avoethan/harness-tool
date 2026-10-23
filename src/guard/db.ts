@@ -6,7 +6,9 @@
  * connection strings and URLs anywhere in the segment, env assignments in
  * the command, SQLCMDSERVER-style variables in the hook env, the container
  * or host of a docker/ssh/kubectl wrapper) and allow only when every
- * target matches an allowlist entry marked `test`. Everything the guard
+ * target matches an allowlist entry marked `test`, or, when some target is
+ * marked `read-only`, only when the SQL is inline and the read-only
+ * classifier (src/guard/sqlreadonly.ts) proves it reads. Everything the guard
  * cannot resolve (DSNs, config aliases, variables, script files,
  * interactive sessions, opaque wrappers) is denied with a reason that says
  * what to do instead.
@@ -17,6 +19,7 @@ import type { DbConfig, DbTarget } from '../types';
 import { hashJson } from '../lib/hash';
 import type { Segment } from './parse';
 import { segmentText } from './parse';
+import { classifyReadOnlySql, tokenizeTsql } from './sqlreadonly';
 import {
   DB_CLIENTS,
   DB_CLIENT_IMAGE_RE,
@@ -60,6 +63,14 @@ export interface DbResolution {
   dangerous: string[];
   interactive: boolean;
   outFiles: string[];
+  /** Every SQL text the guard read for this command (query flags, here-strings, heredocs, echoed input). */
+  sqlText?: string;
+  /** SQL given inline only (query flags and here-strings): the only SQL a read-only target accepts. */
+  inlineSql?: string;
+  /** Why this command cannot be judged by the read-only rule (no inline SQL, a pipe, a variable, an extra argument). */
+  inlineBlockers: string[];
+  /** Any part of the SQL text came from a variable or command substitution. */
+  sqlDynamic: boolean;
 }
 
 export const MARK_INSTRUCTION = 'ask the user to run `harness db mark` and mark the test server as test';
@@ -115,38 +126,70 @@ export interface MatchResult {
   ok: boolean;
   entry?: DbTarget;
   /** Why the best candidate did not match. */
-  why?: 'no-entry' | 'not-test' | 'port' | 'database';
+  why?: 'no-entry' | 'not-test' | 'read-only' | 'port' | 'database';
 }
 
-/** Does a resolved target match an allowlist entry marked test? */
-export function matchAllowlist(t: DbTargetRef, allowlist: DbTarget[], kind?: string): MatchResult {
-  let why: MatchResult['why'] = 'no-entry';
-  let candidate: DbTarget | undefined;
+export type TargetMark = DbTarget['marked'];
+
+export interface TargetClass {
+  /** The mark that applies to this target, when an entry covers it. */
+  mark?: TargetMark;
+  entry?: DbTarget;
+  /** Why no entry covers it (only when mark is absent). */
+  why?: 'no-entry' | 'port' | 'database';
+}
+
+const STRICTNESS: Record<TargetMark, number> = { test: 0, 'read-only': 1, 'not-test': 2 };
+
+function stricter(a: DbTarget, b: DbTarget): DbTarget {
+  return STRICTNESS[b.marked] > STRICTNESS[a.marked] ? b : a;
+}
+
+/** Entries on the same server (host, and port when the entry names one) as the target. */
+function entriesOnServer(t: DbTargetRef, allowlist: DbTarget[], kind?: string): { host: DbTarget[]; server: DbTarget[] } {
+  const host: DbTarget[] = [];
+  const server: DbTarget[] = [];
   for (const e of allowlist) {
     const ep = entryParts(e.server);
-    if (!ep) continue;
-    if (ep.host !== t.host.toLowerCase()) continue;
-    candidate = e;
+    if (!ep || ep.host !== t.host.toLowerCase()) continue;
+    host.push(e);
     if (ep.port) {
       const tp = t.port ?? (kind ? DEFAULT_PORTS[kind] : undefined);
-      if (tp !== ep.port) {
-        why = 'port';
-        continue;
-      }
+      if (tp !== ep.port) continue;
     }
-    if (e.marked !== 'test') {
-      why = 'not-test';
-      continue;
-    }
-    if (e.database) {
-      if (!t.database || t.database.toLowerCase() !== e.database.toLowerCase()) {
-        why = 'database';
-        continue;
-      }
-    }
-    return { ok: true, entry: e };
+    server.push(e);
   }
-  return { ok: false, entry: candidate, why };
+  return { host, server };
+}
+
+/**
+ * Which mark covers a resolved target. A database-scoped entry beats a
+ * server-wide one; among entries of the same scope the strictest wins
+ * (not-test, then read-only, then test). A target without a database lands
+ * in the login's default database, which may be any database on the server,
+ * so a database-scoped read-only or not-test entry on that server applies
+ * to it too.
+ */
+export function classifyTarget(t: DbTargetRef, allowlist: DbTarget[], kind?: string): TargetClass {
+  const { host, server } = entriesOnServer(t, allowlist, kind);
+  if (!host.length) return { why: 'no-entry' };
+  if (!server.length) return { why: 'port', entry: host[0] };
+  const db = t.database?.toLowerCase();
+  const scoped = db ? server.filter((e) => e.database && e.database.toLowerCase() === db) : [];
+  const wide = server.filter((e) => !e.database);
+  let pool = scoped.length ? scoped : wide;
+  if (!pool.length) return { why: 'database', entry: server.find((e) => e.database) ?? server[0] };
+  if (!db) pool = [...pool, ...server.filter((e) => e.database && e.marked !== 'test')];
+  const pick = pool.reduce(stricter);
+  return { mark: pick.marked, entry: pick };
+}
+
+/** Does a resolved target match an allowlist entry marked test (the only mark that allows writes)? */
+export function matchAllowlist(t: DbTargetRef, allowlist: DbTarget[], kind?: string): MatchResult {
+  const c = classifyTarget(t, allowlist, kind);
+  if (c.mark === 'test') return { ok: true, entry: c.entry };
+  if (c.mark) return { ok: false, entry: c.entry, why: c.mark };
+  return { ok: false, entry: c.entry, why: c.why };
 }
 
 /** The allowlist is trusted only when its hash equals the one written at marking time. */
@@ -160,7 +203,7 @@ export function allowlistSigned(db: DbConfig): boolean {
 // ---------------------------------------------------------------------------
 
 const URL_RE = /\b(mssql|sqlserver|postgres(?:ql)?(?:\+[a-z0-9_]+)?|mysql(?:\+[a-z0-9_]+)?|mariadb|mongodb(?:\+srv)?|rediss?|odbc|oracle|jdbc:[a-z]+|mssql\+[a-z0-9_]+|sqlite):\/\/([^\s'"`;)>]+)/gi;
-const KV_HOST_RE = /\b(server|data source|datasource|addr|address|network address|host|hostname|server name|sqlinstance|serverinstance)\s*[=:]\s*(?!\s*[=:])(["']?)([^;'"`\s,]+(?:,\d+)?)\2/gi;
+const KV_HOST_RE = /\b(server|data source|datasource|addr|address|network address|host|hostname|server name|sqlinstance|serverinstance|failover partner|failoverpartner)\s*[=:]\s*(?!\s*[=:])(["']?)([^;'"`\s,]+(?:,\d+)?)\2/gi;
 const KV_DB_RE = /\b(database|initial catalog|dbname|db name|databasename|database name)\s*[=:]\s*(["']?)([^;'"`\s,]+)\2/gi;
 const DSN_RE = /\b(dsn|filedsn)\s*=/i;
 const ENV_REF_RE = /process\.env(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*\])|os\.environ(?:\.get)?\s*[\[(]\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]|os\.getenv\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]|\$env:([A-Za-z_][A-Za-z0-9_]*)|\$\{?([A-Z_][A-Z0-9_]*)\}?/g;
@@ -235,6 +278,8 @@ export function findTargetsInText(text: string, source: string, cmdEnv: Record<s
     out.unresolved.push(...sub.unresolved);
     out.databases.push(...sub.databases);
   }
+  // Two different database names in one text: which one the driver uses is not certain.
+  if (new Set(out.databases.map((d) => d.toLowerCase())).size > 1) out.unresolved.push('more than one database name in one connection string');
   // Attach loose database names to hosts that have none.
   if (out.databases.length) for (const t of out.targets) if (!t.database) t.database = out.databases[0];
   return out;
@@ -293,6 +338,12 @@ interface FlagScan {
   out: string[];
   positionals: string[];
   unknownFlags: string[];
+  /** Argument indexes the query texts came from. */
+  queryIdx: number[];
+  /** Flag-shaped values a value flag took (`-h -i x.sql`: the client may read -i as a flag). */
+  swallowed: string[];
+  /** Value flags that were given (spec spelling). */
+  valueFlagsUsed: string[];
 }
 
 function flagMatches(token: string, flag: string, cmdlet: boolean): { hit: boolean; attached?: string } {
@@ -359,14 +410,19 @@ interface FlagGroups {
 }
 
 function scanFlags(args: string[], spec: DbClientSpec): FlagScan {
-  const r: FlagScan = { interactive: false, servers: [], databases: [], queries: [], scripts: [], dsn: false, conn: [], aliases: [], out: [], positionals: [], unknownFlags: [] };
+  const r: FlagScan = { interactive: false, servers: [], databases: [], queries: [], scripts: [], dsn: false, conn: [], aliases: [], out: [], positionals: [], unknownFlags: [], queryIdx: [], swallowed: [], valueFlagsUsed: [] };
   let i = 0;
+  let lastIdx = -1;
+  const allFlags = [spec.serverFlags, spec.dbFlags, spec.queryFlags, spec.interactiveFlags ?? [], spec.scriptFlags, spec.dsnFlags, spec.connFlags, spec.aliasFlags, spec.outFlags].flat();
   const take = (attached: string | undefined): string => {
     if (attached !== undefined) {
+      lastIdx = i;
       i++;
       return attached;
     }
+    lastIdx = i + 1;
     const v = args[i + 1] ?? '';
+    if (v.startsWith('-') && v.length > 1 && allFlags.some((f) => flagMatches(v, f, !!spec.cmdlet).hit)) r.swallowed.push(v);
     i += 2;
     return v;
   };
@@ -399,6 +455,7 @@ function scanFlags(args: string[], spec: DbClientSpec): FlagScan {
             break;
           case 'queries':
             r.queries.push(v);
+            if (attached !== undefined || nextIsValue) r.queryIdx.push(lastIdx);
             break;
           case 'scripts':
             r.scripts.push(v || '(file)');
@@ -413,6 +470,7 @@ function scanFlags(args: string[], spec: DbClientSpec): FlagScan {
             r.out.push(v);
             break;
           default:
+            r.valueFlagsUsed.push(p.flag);
             break;
         }
         matched = true;
@@ -446,12 +504,15 @@ function scanFlags(args: string[], spec: DbClientSpec): FlagScan {
           i++;
         } else if (group === 'value') {
           take(fm.attached);
+          r.valueFlagsUsed.push(f);
         } else if (group === 'interactive') {
           r.interactive = true;
           r.queries.push(take(fm.attached));
+          r.queryIdx.push(lastIdx);
         } else {
           const v = take(fm.attached);
           (r[group] as string[]).push(v);
+          if (group === 'queries') r.queryIdx.push(lastIdx);
         }
         break;
       }
@@ -507,6 +568,97 @@ function scanStatements(kind: DbKind, text: string, restrictDb: boolean): { scri
 }
 
 // ---------------------------------------------------------------------------
+// Inline SQL (what a read-only target accepts)
+// ---------------------------------------------------------------------------
+
+/** Clients whose inline SQL the read-only rule reads (all SQL Server, all T-SQL). */
+const READ_ONLY_CLIENTS = new Set(['sqlcmd', 'osql', 'isql', 'mssql-cli', 'invoke-sqlcmd', 'invoke-dbaquery']);
+/** Flags without a value that change nothing about what is sent or where (sqlcmd, osql, isql). */
+const READ_ONLY_SAFE_FLAGS = new Set(['-E', '-b', '-W', '-I', '-X', '-x', '-e', '-p', '-r', '-r0', '-r1', '-j', '-G', '-C']);
+/** Switch parameters of the cmdlets that change nothing about what is sent or where. */
+const READ_ONLY_SAFE_SWITCHES = new Set(['-trustservercertificate', '-abortonerror', '-includesqlusererrors', '-outputsqlerrors', '-suppressprovidercontextwarning', '-ignoreprovidercontext', '-disablevariables', '-disablecommands', '-enableexception', '-readonly', '-verbose']);
+/**
+ * Value flags that change how the SQL is run or what else happens: a stored-procedure call instead of
+ * a batch (-CommandType), another batch terminator, so a procedure name can start a batch (-c), a new
+ * login password (-z, -Z).
+ */
+const READ_ONLY_BLOCKED_VALUE_FLAGS = new Set(['-CommandType', '-c', '-z', '-Z']);
+
+/** A POSIX word, as written, has an unquoted glob, brace or tilde character (the shell may expand it into other text). */
+export function unquotedExpansion(raw: string): boolean {
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (c === '\\') {
+      i++;
+      continue;
+    }
+    if (c === "'") {
+      const end = raw.indexOf("'", i + 1);
+      if (end < 0) return true;
+      i = end;
+      continue;
+    }
+    if (c === '$' && raw[i + 1] === "'") {
+      let j = i + 2;
+      while (j < raw.length && raw[j] !== "'") j += raw[j] === '\\' ? 2 : 1;
+      i = j;
+      continue;
+    }
+    if (c === '"') {
+      let j = i + 1;
+      while (j < raw.length && raw[j] !== '"') j += raw[j] === '\\' ? 2 : 1;
+      i = j;
+      continue;
+    }
+    if (c === '*' || c === '?' || c === '[' || c === '{' || c === '}' || c === '~') return true;
+  }
+  return false;
+}
+
+/** `@'<newline>...<newline>'@` as a POSIX parse leaves it: the PowerShell here-string's body. */
+function unwrapPsHereString(text: string): string {
+  const m = /^@\r?\n([\s\S]*?)\r?\n@$/.exec(text);
+  return m ? m[1] : text;
+}
+
+/** Fill inlineSql / inlineBlockers / sqlDynamic for a known client. */
+function inlineSqlFor(seg: Segment, spec: DbClientSpec, f: FlagScan, cmdEnv: Record<string, string>, hookEnv: NodeJS.ProcessEnv, res: DbResolution): void {
+  const b = res.inlineBlockers;
+  if (!(spec.kind === 'mssql' || spec.kind === 'dbatools') || !READ_ONLY_CLIENTS.has(seg.prog)) {
+    b.push(`${seg.prog || 'this client'} (only sqlcmd, osql, isql, mssql-cli, Invoke-Sqlcmd and Invoke-DbaQuery with inline SQL are checked)`);
+    return;
+  }
+  const parts: string[] = [];
+  f.queries.forEach((q, k) => {
+    const idx = f.queryIdx[k];
+    if (idx === undefined) return; // echoed into a pipe: blocked below
+    const tok = seg.argTokens[idx];
+    if (tok?.dynamic) res.sqlDynamic = true;
+    if (tok && seg.dialect === 'posix' && unquotedExpansion(tok.raw)) b.push('an unquoted *, ?, [, {, } or ~ the shell may expand (quote the SQL)');
+    parts.push(spec.cmdlet && seg.dialect === 'posix' ? unwrapPsHereString(q) : q);
+  });
+  for (const r of seg.redirects) {
+    if (r.op !== '<<<') continue;
+    if (r.dynamic) res.sqlDynamic = true;
+    parts.push(r.target);
+  }
+  if (seg.heredoc !== undefined) b.push('a heredoc (pass the SQL inline with -Q or -Query)');
+  if (seg.argsFromStdin) b.push('arguments read from stdin');
+  if (seg.dialect !== 'posix' && !spec.cmdlet && seg.argTokens.some((t) => t.text.includes('"') || /\\$/.test(t.text))) b.push('a double quote or a trailing backslash in an argument (Windows may split it into other arguments)');
+  if (seg.stdinFromPipe) b.push('piped input');
+  if (f.positionals.length) b.push('an extra argument the client may read as SQL or a flag');
+  for (const u of f.unknownFlags) {
+    const name = u.replace(/:.*$/, '');
+    if (spec.cmdlet ? !READ_ONLY_SAFE_SWITCHES.has(name.toLowerCase()) : !READ_ONLY_SAFE_FLAGS.has(u)) b.push(`the flag ${name.slice(0, 30)}`);
+  }
+  for (const v of f.valueFlagsUsed) if (READ_ONLY_BLOCKED_VALUE_FLAGS.has(v)) b.push(`the flag ${v}`);
+  if (!spec.cmdlet && envLookup('SQLCMDINI', cmdEnv, hookEnv) !== undefined) b.push('SQLCMDINI (a startup script sqlcmd runs first)');
+  if (res.sqlDynamic) b.push('SQL built from a variable or command substitution');
+  if (!parts.length) b.push('no inline SQL');
+  else res.inlineSql = parts.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Segment analysis
 // ---------------------------------------------------------------------------
 
@@ -546,7 +698,7 @@ function modulesInCode(code: string, lang: Segment['innerLang']): Set<string> {
 export function analyzeDbSegment(seg: Segment, hookEnv: NodeJS.ProcessEnv, producer?: Segment): DbResolution | null {
   const cmdEnv = seg.env;
   const container = wrapperTarget(seg);
-  const res: DbResolution = { client: seg.prog, kind: 'env-only', targets: [], unresolved: [], scriptInputs: [], dangerous: [], interactive: false, outFiles: [] };
+  const res: DbResolution = { client: seg.prog, kind: 'env-only', targets: [], unresolved: [], scriptInputs: [], dangerous: [], interactive: false, outFiles: [], inlineBlockers: [], sqlDynamic: false };
   const addFound = (f: Found) => {
     res.targets.push(...f.targets);
     res.unresolved.push(...f.unresolved);
@@ -598,6 +750,9 @@ export function analyzeDbSegment(seg: Segment, hookEnv: NodeJS.ProcessEnv, produ
   }
   const otherDbaCmdlet = !spec && DB_CMDLET_RE.test(seg.prog) && seg.prog.includes('dba') && !seg.prog.startsWith('invoke-');
   if (!spec && DB_CMDLET_RE.test(seg.prog)) spec = seg.prog.includes('dba') ? DB_CLIENTS['invoke-dbaquery'] : DB_CLIENTS['invoke-sqlcmd'];
+  // cmd.exe cannot run a PowerShell cmdlet, so the cmd reading of such a line is not what runs; the
+  // PowerShell and POSIX readings of the same line are still checked.
+  if (spec?.cmdlet && seg.dialect === 'cmd') return isDb ? finish() : null;
   if (spec) {
     const f = scanFlags(args, spec);
     if (spec.subcommands) {
@@ -659,7 +814,8 @@ export function analyzeDbSegment(seg: Segment, hookEnv: NodeJS.ProcessEnv, produ
         addFound(found);
       }
     }
-    // database flags and positionals
+    // database flags and positionals (two different ones: the client may use either)
+    if (new Set(f.databases.map((d) => d.toLowerCase())).size > 1) res.unresolved.push('more than one database flag');
     const dbNames: string[] = [];
     for (const d of f.databases) {
       const found = findTargetsInText(d, 'dbname', cmdEnv, hookEnv);
@@ -692,6 +848,12 @@ export function analyzeDbSegment(seg: Segment, hookEnv: NodeJS.ProcessEnv, produ
     }
     // query text
     const queryText = [...f.queries, seg.heredoc ?? '', ...seg.redirects.filter((r) => r.op === '<<<').map((r) => r.target)].join('\n');
+    if (seg.argsFromStdin) res.unresolved.push('arguments read from stdin (xargs), which may name another server or script');
+    for (const v of f.swallowed) res.unresolved.push(`the flag ${v.slice(0, 20)} given as the value of another flag (the client may read it as a flag)`);
+    inlineSqlFor(seg, spec, f, cmdEnv, hookEnv, res);
+    res.sqlText = queryText;
+    if (seg.heredoc !== undefined && /[$`]/.test(seg.heredoc)) res.sqlDynamic = true;
+    if (seg.stdinFromPipe && producer?.dynamic) res.sqlDynamic = true;
     const stdinFile = seg.redirects.find((r) => r.op === '<');
     if (stdinFile) res.scriptInputs.push(stdinFile.target || '(stdin file)');
     res.scriptInputs.push(...f.scripts);
@@ -800,8 +962,86 @@ function listTestServers(db: DbConfig): string {
   return names.length ? names.join(', ') : 'none';
 }
 
+export interface DbDecideOptions {
+  /** Only `test` targets pass (harness verify's own access: it creates, restores and seeds). */
+  requireTest?: boolean;
+}
+
+/** `server/database` or `server (every database)` of the entry that marks a target. */
+function markLabel(t: DbTargetRef, entry?: DbTarget): string {
+  if (entry?.database) return `${entry.server}/${entry.database}`;
+  return `${entry?.server ?? t.host}${t.database ? `/${t.database}` : ' (every database)'}`;
+}
+
+/** The deny reason for a read-only target: names the mark and the offending word only, never the statement. */
+export function readOnlyReason(label: string, word: string): string {
+  return `${label} is marked read-only: this statement could write (${word.slice(0, 80)}); stop and ask the user to run it or approve it.`;
+}
+
+/** System procedures a test command may call on a server that also holds read-only or not-test databases. */
+const SHARED_SERVER_SAFE_PROCS = new Set(['sp_help', 'sp_helptext', 'sp_helpindex', 'sp_helpconstraint', 'sp_columns', 'sp_tables', 'sp_pkeys', 'sp_fkeys', 'sp_depends', 'sp_spaceused', 'sp_rename', 'sp_who', 'sp_who2', 'sp_lock', 'sp_stored_procedures', 'sp_describe_first_result_set']);
+/** Words that reach outside the test database without naming it (variables, server-wide code, Service Broker). */
+const SHARED_SERVER_WORDS = new Set(['DBCC', 'ASSEMBLY', 'EXTERNAL', 'SEND', 'DIALOG', 'SHUTDOWN']);
+
+/** `name` as a whole word (letters, digits and _ around it do not count) in `text`, case-insensitive. */
+function wholeWordIn(text: string, name: string): boolean {
+  const hay = text.toLowerCase();
+  const needle = name.toLowerCase();
+  for (let at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + 1)) {
+    const before = hay[at - 1] ?? '';
+    const after = hay[at + needle.length] ?? '';
+    if (!/[a-z0-9_]/.test(before) && !/[a-z0-9_]/.test(after)) return true;
+  }
+  return false;
+}
+
+/**
+ * A test target on a server whose other databases are not all test (a
+ * database-scoped test entry, or read-only / not-test entries beside it):
+ * the SQL must stay inside the target database. Returns the offending word.
+ */
+export function sharedServerWord(sql: string, database: string, protectedNames: string[]): string | null {
+  if (/[^\t\r\n\x20-\x7e]/.test(sql)) return 'a non-ASCII or control character';
+  if (sql.includes('$(')) return '$( (a sqlcmd variable)';
+  const scan = tokenizeTsql(sql);
+  if (!scan.ok) return scan.word ?? 'text the guard cannot read';
+  const toks = scan.toks;
+  const names = new Set(protectedNames.map((n) => n.toLowerCase()));
+  const db = database.toLowerCase();
+  for (let k = 0; k < toks.length; k++) {
+    const t = toks[k];
+    if (t.kind === 'string') {
+      for (const n of names) if (wholeWordIn(t.text, n)) return `the database ${n}`;
+      continue;
+    }
+    if (t.kind === 'number' || t.kind === 'punct') continue;
+    const low = t.text.trim().toLowerCase();
+    if (names.has(low)) return `the database ${low}`;
+    if (t.kind !== 'word') continue;
+    const w = t.text.toUpperCase();
+    if ((w === 'EXEC' || w === 'EXECUTE') && (toks[k + 1]?.text === '(' || /^@/.test(toks[k + 1]?.text ?? ''))) return `${w} of a string or variable (dynamic SQL)`;
+    if (/^(sp|xp)_/i.test(t.text) && !SHARED_SERVER_SAFE_PROCS.has(low)) return t.text.replace(/[^A-Za-z0-9_]/g, '').slice(0, 40);
+    if (SHARED_SERVER_WORDS.has(w)) return w;
+  }
+  for (let k = 0; k < toks.length; k++) {
+    const t = toks[k];
+    if (!(t.kind === 'word' || t.kind === 'bracket' || t.kind === 'qident') || toks[k - 1]?.text === '.') continue;
+    let parts = 1;
+    let j = k + 1;
+    while (toks[j]?.kind === 'punct' && toks[j].text === '.') {
+      parts++;
+      j++;
+      if (toks[j] && (toks[j].kind === 'word' || toks[j].kind === 'bracket' || toks[j].kind === 'qident')) j++;
+    }
+    if (parts >= 4) return 'a four-part name (a linked server)';
+    if (parts === 3 && t.text.trim().toLowerCase() !== db) return `a three-part name in another database (${t.text.replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || 'a name'})`;
+    k = j - 1;
+  }
+  return null;
+}
+
 /** Evaluate a resolution against the allowlist. */
-export function decideDb(res: DbResolution, db: DbConfig): GuardDecisionLike {
+export function decideDb(res: DbResolution, db: DbConfig, opts: DbDecideOptions = {}): GuardDecisionLike {
   const who = res.client || 'the database client';
   if (!db.allowlist.length) {
     return { decision: 'deny', rail: 'db', reason: `No test database is marked yet, so ${who} is refused; ${MARK_INSTRUCTION}, then retry.`, matched: who };
@@ -813,6 +1053,11 @@ export function decideDb(res: DbResolution, db: DbConfig): GuardDecisionLike {
     return { decision: 'deny', rail: 'db', reason: `${who} reads SQL from a script (${res.scriptInputs[0].slice(0, 60)}) that could switch servers inside, so the guard cannot check it; pass the statements inline (-Q for sqlcmd, -c for psql, -e for mysql) against a test server instead.`, matched: res.scriptInputs[0] };
   }
   if (res.dangerous.length) {
+    const roTarget = res.targets.map((t) => ({ t, c: classifyTarget(t, db.allowlist, res.kind) })).find((x) => x.c.mark === 'read-only');
+    if (roTarget) {
+      const label = markLabel(roTarget.t, roTarget.c.entry);
+      return { decision: 'deny', rail: 'db', reason: readOnlyReason(label, res.dangerous[0]), matched: label };
+    }
     return { decision: 'deny', rail: 'db', reason: `The statement uses ${res.dangerous[0]}, which reaches outside the test database or runs shell commands on the server; rewrite it with plain queries against the test server.`, matched: res.dangerous[0] };
   }
   if (res.interactive) {
@@ -821,30 +1066,62 @@ export function decideDb(res: DbResolution, db: DbConfig): GuardDecisionLike {
   if (res.unresolved.length) {
     return { decision: 'deny', rail: 'db', reason: `${who} would connect to ${res.unresolved[0]}, which the guard cannot resolve to a server name; name the test server explicitly (for example -S <server>) instead of a DSN, alias or variable.`, matched: res.unresolved[0] };
   }
+  const oddDb = res.targets.find((t) => t.database !== undefined && !/^[A-Za-z0-9_][A-Za-z0-9_$#@-]*$/.test(t.database));
+  if (oddDb) {
+    return { decision: 'deny', rail: 'db', reason: `${who} names a database the guard cannot compare with the allowlist (spaces, quotes, brackets, dots or other characters in the name); write the plain database name.`, matched: 'database name' };
+  }
   if (!res.targets.length) {
     return { decision: 'deny', rail: 'db', reason: `${who} gives no server the guard can check; name the test server explicitly (for example -S <server>).`, matched: who };
   }
-  for (const t of res.targets) {
-    const m = matchAllowlist(t, db.allowlist, res.kind);
-    if (m.ok) continue;
+  const classes = res.targets.map((t) => ({ t, c: classifyTarget(t, db.allowlist, res.kind) }));
+  for (const { t, c } of classes) {
+    if (c.mark === 'test' || c.mark === 'read-only') continue;
+    const m: MatchResult = { ok: false, entry: c.entry, why: c.mark === 'not-test' ? 'not-test' : c.why };
     const target = t.host + (t.port ? ',' + t.port : '') + (t.database ? '/' + t.database : '');
     if (m.why === 'not-test') return { decision: 'deny', rail: 'db', reason: `${who} would connect to ${target}, which is marked not-test; use a test server (${listTestServers(db)}) or ${MARK_INSTRUCTION}.`, matched: target };
     if (m.why === 'database') return { decision: 'deny', rail: 'db', reason: `${who} would use ${target}, but the test entry for ${t.host} allows only the database "${m.entry?.database}"; select that database (-d ${m.entry?.database}) or ${MARK_INSTRUCTION} for the one you need.`, matched: target };
     if (m.why === 'port') return { decision: 'deny', rail: 'db', reason: `${who} would connect to ${target}, but the test entry for ${t.host} names port ${entryParts(m.entry?.server ?? '')?.port}; use that port.`, matched: target };
     return { decision: 'deny', rail: 'db', reason: `${who} would connect to ${target}, which is not marked as a test database; use a test server (${listTestServers(db)}) or ${MARK_INSTRUCTION}.`, matched: target };
   }
+  const ro = classes.filter((x) => x.c.mark === 'read-only');
+  if (ro.length) {
+    const label = markLabel(ro[0].t, ro[0].c.entry);
+    if (opts.requireTest) return { decision: 'deny', rail: 'db', reason: `${label} is marked read-only, so harness verify does not create, restore, copy or seed anything there; use a server marked test, or ask the user to mark it test with \`harness db mark\`.`, matched: label };
+    const blocker = res.inlineBlockers[0] ?? (res.inlineSql === undefined ? `${who} (no inline SQL the guard can read)` : undefined);
+    if (blocker) return { decision: 'deny', rail: 'db', reason: readOnlyReason(label, blocker), matched: label };
+    const databases = res.targets.map((t) => t.database).filter((d): d is string => !!d);
+    const v = classifyReadOnlySql(res.inlineSql ?? '', { databases });
+    if (!v.ok) return { decision: 'deny', rail: 'db', reason: readOnlyReason(label, v.word ?? 'a statement the guard cannot read'), matched: label };
+    return { decision: 'allow', rail: 'db', reason: `read-only target ${label}: every statement only reads` };
+  }
+  // Test targets on a server that also holds databases the agent may not write.
+  for (const { t, c } of classes) {
+    const others = entriesOnServer(t, db.allowlist, res.kind).server.filter((e) => e.marked !== 'test' && e.database).map((e) => e.database as string);
+    if (!others.length && !c.entry?.database) continue;
+    const target = markLabel(t, c.entry);
+    const lead = `${who} would use ${target}, which shares its server with databases the agent may not write`;
+    // Inline driver code and dacpac deployments carry SQL the guard does not read. (A command that only
+    // sets a connection variable for the app or a migration tool is judged by its target alone: the
+    // guard cannot see the SQL of repository code either way.)
+    if (res.kind === 'code' || res.kind === 'sqlpackage') return { decision: 'deny', rail: 'db', reason: `${lead}, and its SQL is inside code the guard does not read; use sqlcmd -Q with the statements inline.`, matched: target };
+    if (res.kind !== 'mssql' && res.kind !== 'dbatools') continue;
+    if (!res.sqlText || !res.sqlText.trim()) return { decision: 'deny', rail: 'db', reason: `${lead}, and it gives the guard no SQL to check; pass the statements inline (-Q for sqlcmd).`, matched: target };
+    if (res.sqlDynamic) return { decision: 'deny', rail: 'db', reason: `${lead}, and its SQL is built from a variable; write the statements literally.`, matched: target };
+    const word = sharedServerWord(res.sqlText, t.database ?? '', others);
+    if (word) return { decision: 'deny', rail: 'db', reason: `${lead}; the statement could reach another database (${word}); keep it inside ${t.database ?? 'the test database'}, or stop and ask the user.`, matched: target };
+  }
   return { decision: 'allow', rail: 'db', reason: `all targets marked test (${res.targets.map((t) => t.host).join(', ')})` };
 }
 
 /** Full check of one segment: null when the segment is not a DB command. */
-export function evaluateDbSegment(seg: Segment, hookEnv: NodeJS.ProcessEnv, db: DbConfig, producer?: Segment): GuardDecisionLike | null {
+export function evaluateDbSegment(seg: Segment, hookEnv: NodeJS.ProcessEnv, db: DbConfig, producer?: Segment, opts: DbDecideOptions = {}): GuardDecisionLike | null {
   // Opaque segments that mention a DB client are denied outright.
   if (seg.opaque && DB_KEYWORD_RE.test(segmentText(seg))) {
     return { decision: 'deny', rail: 'db', reason: `The command runs a database client through something the guard cannot read (${seg.opaqueReason ?? 'opaque'}); write the client call literally (for example sqlcmd -S <test-server> -Q "...") so it can be checked.`, matched: seg.opaqueReason ?? 'opaque' };
   }
   const res = analyzeDbSegment(seg, hookEnv, producer);
   if (!res) return null;
-  return decideDb(res, db);
+  return decideDb(res, db, opts);
 }
 
 // ---------------------------------------------------------------------------

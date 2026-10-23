@@ -136,3 +136,26 @@ test('personal setting: committing on the task branch is allowed unattended (the
   // the rails stay: deny rules beat allow rules in Claude Code
   assert.ok(personal.deny.some((r) => /^Bash\(git push --force/.test(r)), 'force-push still denied');
 });
+
+test('a read-only database adds no allow rule: no rendered rule pre-approves a database command, the hook decides', () => {
+  const dbCommands = [
+    'sqlcmd -S sqlro -d reports -Q "SELECT 1"',
+    'sqlcmd -S sqlro -d reports -Q "DELETE FROM t"',
+    'osql -S sqlro -d reports -Q "SELECT 1"',
+    'bcp dbo.t in t.dat -S sqlro -d reports',
+    'Invoke-Sqlcmd -ServerInstance sqlro -Database reports -Query "SELECT 1"',
+    'mssql-cli -S sqlro -d reports -Q "SELECT 1"',
+  ];
+  const clients = /\b(sqlcmd|osql|bcp|invoke-sqlcmd|mssql-cli|sqlpackage|psql|mysql)\b/i;
+  for (const setting of ['team', 'personal'] as const) {
+    const ctx = context(setting, ['claude', 'devin', 'codex']);
+    ctx.config = { ...ctx.config!, db: { allowlist: [{ server: 'sqlro', database: 'reports', marked: 'read-only' }, { server: 'sql-test', marked: 'test' }] } };
+    const p = buildPermissions(permissionOptions(ctx, allRepoFacts(ctx)));
+    for (const c of dbCommands) assert.ok(!claudeAllows(p.claude.allow, c), `${setting}: a Claude allow rule pre-approves ${c}`);
+    assert.deepEqual(p.claude.allow.filter((r) => clients.test(r)), [], `${setting}: Claude`);
+    assert.deepEqual(p.devin.allow.filter((r) => clients.test(r)), [], `${setting}: Devin`);
+    assert.deepEqual(p.codex.rules.filter((r) => clients.test(r) && /decision="allow"/.test(r)), [], `${setting}: Codex`);
+    // Devin keeps asking for every client; the hook still decides.
+    assert.ok(p.devin.ask.some((r) => /sqlcmd/.test(r)));
+  }
+});

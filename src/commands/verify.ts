@@ -19,7 +19,7 @@ import { buildFeatureMap, loadFeatureMap, saveFeatureMap, type FeatureMap } from
 import { launch } from '../verify/launch';
 import { acceptEntries, addMissing, drift, loadOverlay, maintainDiff, saveOverlay } from '../verify/overlay';
 import { parseRunEnv, renderCmd, renderPosix, renderPowerShell } from '../verify/runenv';
-import { displayCommand } from '../verify/sqlcmd';
+import { checkReadOnlyTarget, displayCommand } from '../verify/sqlcmd';
 import { loadRun, resolveContext, runDirOf, runEnvPath, runFolder, type VerifyContext, type VerifyRun } from '../verify/state';
 
 export const meta: CommandMeta = {
@@ -181,7 +181,7 @@ async function cmdDb(p: Parsed): Promise<number> {
     err(`Cannot reach the run database: ${pf.reason}`);
     return 1;
   }
-  const rc = recheckPlan(pf.plan, ctx.config.db);
+  const rc = recheckPlan(pf.plan, ctx.config.db, undefined, { allowReadOnly: true });
   if (!rc.ok) {
     err(`Refused: ${rc.reason}`);
     return 4;
@@ -239,6 +239,11 @@ async function cmdDb(p: Parsed): Promise<number> {
     if (!rec) {
       err(`No DB recipe "${recipeName}" under "dbRecipes" in the feature-map overlay.`);
       return 2;
+    }
+    const roBad = rc.readOnly ? checkReadOnlyTarget(rec.sql, pf.plan.database) : null;
+    if (roBad) {
+      err(`Refused: ${roBad}.`);
+      return 4;
     }
     const params: Record<string, string> = {};
     for (const [k, v] of Object.entries(rec.params ?? {})) {

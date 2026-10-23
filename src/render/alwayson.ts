@@ -141,8 +141,10 @@ export function commandLines(facts: RepoFacts[], setting: 'team' | 'personal'): 
 export function dbLine(ctx: RenderContext): string | null {
   const list = ctx.config?.db?.allowlist ?? [];
   const tests = list.filter((t) => t.marked === 'test').map((t) => (t.database ? `${t.server}/${t.database}` : `${t.server} (every database)`));
-  if (!tests.length) return 'Test databases: none marked yet, so every database command is denied. The user marks them in a terminal (`harness db mark`).';
-  return `Test databases (the only ones commands may reach): ${tests.slice(0, 4).map(code).join(', ')}${tests.length > 4 ? ` and ${tests.length - 4} more (\`harness db list\`)` : ''}.`;
+  const readOnly = list.filter((t) => t.marked === 'read-only').map((t) => (t.database ? `${t.server}/${t.database}` : `${t.server} (every database)`));
+  const ro = readOnly.length ? ` Read-only (inline SELECT only; for any change, stop and ask the user): ${readOnly.slice(0, 4).map(code).join(', ')}${readOnly.length > 4 ? ` and ${readOnly.length - 4} more` : ''}.` : '';
+  if (!tests.length) return `Test databases: none marked yet, so every database command is denied${readOnly.length ? ' except reads of the read-only ones' : ''}. The user marks them in a terminal (\`harness db mark\`).${ro}`;
+  return `Test databases (the only ones commands may ${readOnly.length ? 'write' : 'reach'}): ${tests.slice(0, 4).map(code).join(', ')}${tests.length > 4 ? ` and ${tests.length - 4} more (\`harness db list\`)` : ''}.${ro}`;
 }
 
 function bypassLine(agents: AgentId[]): string {

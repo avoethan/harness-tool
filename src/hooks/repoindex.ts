@@ -61,10 +61,12 @@ export function dbSummaryLines(cfg: HarnessConfig): string[] {
   const list = cfg.db?.allowlist ?? [];
   if (!list.length) return ['Database: no target is marked as a test database, so every database command is denied. The user marks targets with `harness db mark` in a terminal.'];
   const tests = list.filter((t) => t.marked === 'test').map((t) => oneLine(t.database ? `${t.server}/${t.database}` : t.server, 80));
-  const notTest = list.length - tests.length;
+  const readOnly = list.filter((t) => t.marked === 'read-only').map((t) => oneLine(t.database ? `${t.server}/${t.database}` : `${t.server} (every database)`, 80));
+  const notTest = list.length - tests.length - readOnly.length;
   const signed = !!cfg.db.markedHash && allowlistHash(cfg) === cfg.db.markedHash;
   const shown = tests.slice(0, 6).join(', ') + (tests.length > 6 ? ` (+${tests.length - 6} more)` : '');
   const out = [`Database: test targets ${tests.length ? shown : '(none)'}; ${notTest} marked not-test. Database commands may reach only the test targets.`];
+  if (readOnly.length) out.push(`Database: read-only targets ${readOnly.slice(0, 6).join(', ')}${readOnly.length > 6 ? ` (+${readOnly.length - 6} more)` : ''}: run only inline SELECT statements there (sqlcmd -Q, Invoke-Sqlcmd -Query); for any change, stop and ask the user.`);
   if (!signed) out.push('Database: the allowlist signature does not match, so the guard denies every database command; the user runs `harness doctor`.');
   return out;
 }

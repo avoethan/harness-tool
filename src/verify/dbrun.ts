@@ -524,15 +524,19 @@ export function planFromRun(db: RunDb, vcfg: VerifyConfig): { ok: boolean; plan?
   return { ok: true, plan: { server: db.server, host: db.host, port: db.port, database: db.database, mode: db.mode, transport: t, login: { user: db.user, passwordEnv: db.passwordEnv }, snapshot: db.snapshot } };
 }
 
-/** The DB rail again for a saved plan (the allowlist may have changed since launch). */
-export function recheckPlan(plan: DbPlan, db: DbConfig, container?: ContainerInfo): { ok: boolean; reason: string } {
+/**
+ * The DB rail again for a saved plan (the allowlist may have changed since launch). With
+ * `allowReadOnly` (verify db) a run database now marked read-only passes with `readOnly: true`,
+ * and the caller may only read it.
+ */
+export function recheckPlan(plan: DbPlan, db: DbConfig, container?: ContainerInfo, opts: { allowReadOnly?: boolean } = {}): { ok: boolean; reason: string; readOnly?: boolean } {
   const ready = allowlistReady(db);
   if (!ready.ok) return ready;
   let c = container;
   if (!c && plan.transport.mode === 'docker' && plan.transport.container) c = sqlServerContainers(plan.transport.docker).find((x) => x.name === plan.transport.container);
-  const s = serviceServerCheck(plan.server, plan.database, db, c);
+  const s = serviceServerCheck(plan.server, plan.database, db, c, opts);
   if (!s.ok) return s;
-  const g = guardCheck(plan.transport, plan.database, plan.login, db, c);
+  const g = guardCheck(plan.transport, plan.database, plan.login, db, c, opts);
   if (!g.ok) return g;
-  return { ok: true, reason: `${s.reason}; ${g.reason}` };
+  return { ok: true, reason: `${s.reason}; ${g.reason}`, readOnly: s.readOnly };
 }
