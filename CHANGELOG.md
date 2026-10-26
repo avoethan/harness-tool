@@ -3,6 +3,11 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.7.0 (2026-10-26)
+
+- `harness changes`: lists every file installs and self-updates added, changed or removed (from the plan records kept with the backups) and how each stands now (as the harness left it, edited since, deleted since, back to the original), and every agent file (instructions, skills, rules, workflows, agent settings, the `assess` inventory) added, changed or removed since the record, by anyone. `--diff` prints line diffs, `--path` filters, `--json` for tools. `harness changes record` sets the starting point (a copy of each text file up to 1 MB under `~/agentfiles/`); install takes the first record; the guard and the rendered permission rules deny `changes record` to Claude, Codex and Devin, since re-recording after an agent's own edits would hide them.
+- Team setup guide: Windows "Extract All" can nest the zip one folder deeper, which makes `npm ci` report a missing lockfile; the guide says to move the inner folder up.
+
 ## 0.6.0 (2026-10-26)
 
 - Devin self-check: a PreToolUse block probe (`echo harness-pre-block-probe`) that only the probe hook denies, for step 8 when the agent refuses forbidden commands before the hook sees them; step 3 says to quit Devin fully (tray icon); step 5's record line reads the right way round.

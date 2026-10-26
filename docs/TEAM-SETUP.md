@@ -29,6 +29,8 @@ installer, no admin rights) and run `node` from there.
 
 Clone (or download the zip of `main` from the repository page and unpack it into your user profile) and build; no install scripts run, no admin rights needed:
 
+(Windows "Extract All" can nest the files one folder deeper, `harness-tool-main\harness-tool-main\…`; `npm ci` then reports a missing `package-lock.json`. Move the inner folder up so `package.json` sits directly in the folder you build in.)
+
 ```powershell
 cd $HOME
 git clone <harness repository URL> harness-tool
@@ -352,6 +354,33 @@ Gate: PASS at tree 9817e0ace66e, attempt 2.
 
 Rows come from the gate's evidence, never from the agent's own words. A row
 that says "gate not run" or "not linked" means the claim is not proven.
+
+### See what changed in your agent files
+
+```powershell
+harness changes                     # both lists below
+harness changes --diff              # with the lines added and removed
+harness changes --path .devin       # only paths containing this text
+harness changes record              # make now the starting point (you run it; agents cannot)
+```
+
+- **What the harness changed.** Every file an install or `self-update`
+  added, changed or removed, from the records kept with the backups, and how
+  each stands now: as the harness left it, edited since, deleted since, or back
+  to your original. `--diff` shows your original against the file now. The
+  harness never deletes a file you wrote.
+- **Your agent files since the record.** Every instruction, skill, rule,
+  workflow and agent settings file (`AGENTS.md`, `.devin/...` and the rest,
+  the same files `harness assess` reads) added, changed or removed since the
+  record, whoever did it: you, an agent, or the harness. Install takes the
+  first record. On an install from before 0.7.0, run `harness changes record`
+  once. Run it again when the changes are as you want them. It keeps a copy
+  of each text file up to 1 MB under `~\.harness\agentfiles`, outside every
+  repository.
+
+Files inside a git repository also show in `git status` and `git diff`.
+Your workspace `AGENTS.md` and `.devin` folder are not in git, so
+`harness changes` is how you see those.
 
 ## 7. Undo
 

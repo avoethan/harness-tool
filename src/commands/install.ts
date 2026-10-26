@@ -46,6 +46,7 @@ import { savePlan } from '../lifecycle/plans';
 import { applyPlan } from '../lifecycle/apply';
 import { formatApply } from '../lifecycle/format';
 import { resignIntegrity } from '../lifecycle/manifest';
+import { loadAgentFilesRecord, recordAgentFiles } from '../lifecycle/agentfiles';
 import { parseReject } from './propose';
 
 export const meta: CommandMeta = {
@@ -241,10 +242,20 @@ export async function main(argv: string[]): Promise<number> {
   }
   if (json) for (const w of res.written) o.lines.push(`${w.action} ${w.path}`);
 
-  // --- 6. private state repository -------------------------------------------
+  // --- 6. the agent-files record (once: later installs keep the user's starting point) ---
+  if (!loadAgentFilesRecord()) {
+    try {
+      const rec = recordAgentFiles({ workspace, setting, agents, includes: cfg.include, by: 'install' });
+      say(o, `Recorded ${rec.files.length} agent file${rec.files.length === 1 ? '' : 's'} as they are now; \`harness changes\` lists what is added, changed or removed from here on.`);
+    } catch (e) {
+      say(o, `Note: the agent files were not recorded (${(e as Error).message}); run \`harness changes record\` yourself.`);
+    }
+  }
+
+  // --- 7. private state repository -------------------------------------------
   initStateRepo(o);
 
-  // --- 7. next steps ----------------------------------------------------------
+  // --- 8. next steps ----------------------------------------------------------
   finish(o, setting, agents, workspace, plan.id);
   instrument({ event: 'install', ids: { plan: plan.id, setting }, counts: { written: res.written.length, agents: agents.length, dbTest: cfg.db.allowlist.filter((t) => t.marked === 'test').length } });
   if (json) process.stdout.write(JSON.stringify({ plan: plan.id, file: planFile, targets: plan.targets.length, applied: true, written: res.written.map((w) => w.path), lines: o.lines }, null, 2) + '\n');

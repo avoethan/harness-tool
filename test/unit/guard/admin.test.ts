@@ -174,3 +174,17 @@ test('permission rules carry the self-check admin prefixes for every agent', () 
     assert.ok(p.claude.deny.includes('Bash(harness selfcheck probe-log --clear *)'));
   }
 });
+
+test('harness changes record is the user\'s; reading the changes stays the agent\'s', () => {
+  for (const c of ['harness changes record', 'harness changes --workspace . record']) {
+    for (const agent of ['claude', 'codex', 'devin'] as const) {
+      const d = evaluate({ ...base, agent, toolName: agent === 'devin' ? 'exec' : 'Bash', toolInput: { command: c } });
+      assert.equal(d.decision, 'deny', `${agent}: ${c}`);
+      assert.equal(d.rail, 'harness-admin');
+    }
+  }
+  const { buildPermissions } = require('../../../src/guard/permissions') as typeof import('../../../src/guard/permissions');
+  const p = buildPermissions({ setting: 'team', protectedRoots: ['/tmp/hh'] });
+  assert.ok(p.devin.deny.includes('Exec(harness changes record)'));
+  assert.equal(run('harness changes --diff --path AGENTS.md').decision, 'allow');
+});
