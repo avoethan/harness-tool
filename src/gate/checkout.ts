@@ -3,7 +3,8 @@
  * and for measuring the base's coverage: `git worktree add --detach` into a
  * temp folder outside the repository (git hooks off), the repository's
  * node_modules linked in (nothing installed), removed and pruned afterwards.
- * The user's working tree and index are never touched.
+ * The user's working tree and index are never touched. The gate's baseline
+ * (src/gate/baseline.ts) keeps one open for a whole run (`openBaseCheckout`).
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -97,26 +98,32 @@ export function linkNodeModules(root: string, wt: string): number {
   return n;
 }
 
+let checkouts = 0;
+
+/** How many base checkouts this process has made (tests read it to prove the baseline cache works). */
+export function checkoutCount(): number {
+  return checkouts;
+}
+
+export interface BaseCheckout {
+  /** The checkout's folder. */
+  wt: string;
+  /** Remove the checkout and prune it from git's worktree list. Safe to call twice. */
+  close(): void;
+}
+
 /**
- * Run `fn` with a checkout of `base` at a temporary path; files from
- * `overlay` (repo-relative path -> text) are written into it first.
+ * Check `base` out at a temporary path and leave it open until `close()`;
+ * files from `overlay` (repo-relative path -> text) are written into it first.
  */
-export function withBaseCheckout<T>(root: string, base: string, overlay: Map<string, string>, fn: (wt: string) => T): { ok: true; value: T } | { ok: false; error: string } {
+export function openBaseCheckout(root: string, base: string, overlay: Map<string, string> = new Map()): { ok: true; checkout: BaseCheckout } | { ok: false; error: string } {
   const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-base-')));
   const wt = path.join(tmp, 'base');
   const hooks = path.join(tmp, 'no-hooks');
-  fs.mkdirSync(hooks);
-  try {
-    const add = rawGit(root, ['-c', `core.hooksPath=${hooks}`, 'worktree', 'add', '--detach', '--force', '-q', wt, base], 300_000);
-    if (add.code !== 0) return { ok: false, error: `could not check out the base commit into a temporary worktree: ${add.stderr.trim().split('\n').pop() ?? ''}` };
-    for (const [rel, text] of overlay) {
-      const dst = path.join(wt, rel);
-      fs.mkdirSync(path.dirname(dst), { recursive: true });
-      fs.writeFileSync(dst, text);
-    }
-    linkNodeModules(root, wt);
-    return { ok: true, value: fn(wt) };
-  } finally {
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
     rawGit(root, ['worktree', 'remove', '--force', wt], 60_000);
     try {
       fs.rmSync(tmp, { recursive: true, force: true });
@@ -124,5 +131,38 @@ export function withBaseCheckout<T>(root: string, base: string, overlay: Map<str
       /* temp */
     }
     rawGit(root, ['worktree', 'prune'], 30_000);
+  };
+  try {
+    fs.mkdirSync(hooks);
+    checkouts++;
+    const add = rawGit(root, ['-c', `core.hooksPath=${hooks}`, 'worktree', 'add', '--detach', '--force', '-q', wt, base], 300_000);
+    if (add.code !== 0) {
+      close();
+      return { ok: false, error: `could not check out the base commit into a temporary worktree: ${add.stderr.trim().split('\n').pop() ?? ''}` };
+    }
+    for (const [rel, text] of overlay) {
+      const dst = path.join(wt, rel);
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.writeFileSync(dst, text);
+    }
+    linkNodeModules(root, wt);
+    return { ok: true, checkout: { wt, close } };
+  } catch (e) {
+    close();
+    return { ok: false, error: `could not prepare the base checkout: ${String((e as Error)?.message ?? e).split('\n')[0]}` };
+  }
+}
+
+/**
+ * Run `fn` with a checkout of `base` at a temporary path; files from
+ * `overlay` (repo-relative path -> text) are written into it first.
+ */
+export function withBaseCheckout<T>(root: string, base: string, overlay: Map<string, string>, fn: (wt: string) => T): { ok: true; value: T } | { ok: false; error: string } {
+  const co = openBaseCheckout(root, base, overlay);
+  if (!co.ok) return co;
+  try {
+    return { ok: true, value: fn(co.checkout.wt) };
+  } finally {
+    co.checkout.close();
   }
 }

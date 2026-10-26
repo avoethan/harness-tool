@@ -152,3 +152,25 @@ test('prove-red: a gate check is "proved by the gate\'s own steps", not run and 
   assert.deepEqual(j.gate.map((x) => x.criterion), ['AC2', 'AC3']);
   assert.deepEqual(j.results, []);
 });
+
+test('a file-contains gate check: the gate reads the file itself, so no test runner is needed', () => {
+  const r = demoRepo(path.join(h.workspace, `g${++n}`), { 'README.md': 'scratch\n' });
+  const AC: Criterion = {
+    id: 'AC1',
+    text: 'README.md contains the line "second line".',
+    kind: 'unit',
+    check: { kind: 'gate', description: 'proved by the gate: README.md contains "second line"', redFirst: false, fileContains: { path: 'README.md', text: 'second line' } },
+  };
+  writeBrief(r, `t-gate-${n}`, [AC]);
+  let ctx = buildContext({ repo: r });
+  ctx.stepResults = [];
+  const before = gateOutcome(ctx, AC);
+  assert.equal(before.status, 'fail');
+  assert.match(before.reasons.join(' '), /does not contain "second line"/);
+  put(r, 'README.md', 'scratch\nsecond line\n');
+  ctx = buildContext({ repo: r });
+  ctx.stepResults = [];
+  assert.equal(gateOutcome(ctx, AC).status, 'pass');
+  const outside: Criterion = { ...AC, check: { ...AC.check!, fileContains: { path: '../x.md', text: 'a' } } };
+  assert.equal(gateOutcome(ctx, outside).status, 'fail');
+});

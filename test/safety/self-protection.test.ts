@@ -19,7 +19,7 @@
  *      write (Devin) payloads, including through a symlink in the repo, are
  *      denied by the hook process; reading stays allowed.
  *   3. nested agents with bypass flags and the user's harness admin commands
- *      (install, apply, undo, uninstall, self-update, config set, db mark,
+ *      (install, apply, undo, uninstall, self-update, config set, db mark, task snapshot,
  *      learn review, selfcheck record/probe-*) from an agent payload are
  *      denied; the agent's own harness commands stay allowed.
  *   4. behaviour: `claude -p` asked to write the Claude settings, the harness
@@ -277,9 +277,13 @@ function adminDeny(): string[] {
     `node "${cliPath}" jira comment --key SHOP-1`,
     'harness gate --from-install',
     'bash -c "harness apply"',
+    'harness task snapshot',
+    'harness task snapshot --task T-003 --repo .',
+    'harness task --repo . snapshot',
+    `node "${cliPath}" task snapshot --task T-003`,
   ];
 }
-const ADMIN_ALLOW = ['harness intake --jira SHOP-102', 'harness intake --jira-next', 'harness gate', 'harness status', 'harness config get', 'harness db list', 'harness selfcheck list', 'harness selfcheck probe-log', 'harness verify doctor'];
+const ADMIN_ALLOW = ['harness task list', 'harness intake --jira SHOP-102', 'harness intake --jira-next', 'harness gate', 'harness status', 'harness config get', 'harness db list', 'harness selfcheck list', 'harness selfcheck probe-log', 'harness verify doctor'];
 
 test('self-protection: nested claude/codex/devin with bypass flags and the harness admin commands are denied from Claude, Codex and Devin payloads; plain nested runs and the agent harness commands stay allowed', (t) => {
   const nb = built();

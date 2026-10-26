@@ -102,6 +102,9 @@ What to do with it:
   message, with the options and the recommended one. Ask nothing else.
   Record each answer with
   `harness intake answer <brief id> --q <n> --answer "<letter or text>"`.
+  When the question is that the ticket has no acceptance criteria and the
+  user gives them, pass the criteria themselves as the answer text (several:
+  separate them with `;`), not the option letter.
   A question you do not get an answer to keeps its recommended option,
   except one marked `blocks`: that criterion waits. Work on the other
   criteria meanwhile.

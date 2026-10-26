@@ -353,6 +353,8 @@ export interface ProbeRecord {
   fields?: string[];
   stopHookActive?: boolean | 'absent';
   stop?: 'allow' | 'block' | 'release' | 'slow-start' | 'slow-end';
+  /** The PreToolUse block probe denied a command carrying PRE_BLOCK_WORD. */
+  preBlock?: 'deny';
   n?: number;
   ms?: number;
   projectDir?: { set: boolean; sameAsCwd?: boolean; isGit?: boolean; isWorkspaceRoot?: boolean };
@@ -363,6 +365,9 @@ export interface ProbeRecord {
 }
 
 const NAME_RE = /^[A-Za-z0-9_.:@$-]{1,64}$/;
+
+/** A harmless word the PreToolUse probe always blocks (`echo harness-pre-block-probe`): no instruction tells an agent to avoid it, so it reaches the hook. */
+export const PRE_BLOCK_WORD = 'harness-pre-block-probe';
 
 function names(xs: unknown[]): string[] {
   return [...new Set(xs.filter((x): x is string => typeof x === 'string' && NAME_RE.test(x)))].sort().slice(0, 40);
@@ -400,6 +405,13 @@ export async function probeHook(event: string, agent: string, stdin: string, env
   const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd();
   if (event === 'PreToolUse' || event === 'PostToolUse') {
     const ti = input.tool_input;
+    const cmd = ti && typeof ti === 'object' && !Array.isArray(ti) ? (ti as Record<string, unknown>).command : undefined;
+    const cmdText = typeof cmd === 'string' ? cmd : Array.isArray(cmd) ? cmd.filter((x) => typeof x === 'string').join(' ') : '';
+    if (event === 'PreToolUse' && cmdText.includes(PRE_BLOCK_WORD)) {
+      record(agent, { event, inputKeys, tool: typeof input.tool_name === 'string' && NAME_RE.test(input.tool_name) ? input.tool_name : undefined, preBlock: 'deny' });
+      const reason = `MARKER-PRE-BLOCK-PROBE: the harness self-check blocked this command on purpose. Do not retry it; tell the user it was blocked by a hook.`;
+      return { code: 2, stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } }), stderr: reason };
+    }
     record(agent, {
       event,
       inputKeys,
@@ -469,6 +481,8 @@ export interface ProbeSummary {
   tools: Record<string, string[]>;
   stop: { allow: number; blocks: number; maxRun: number; releases: number; stopHookActive: string[]; slowStarts: number; slowEnds: number };
   envNames: string[];
+  /** PreToolUse block probe denials. */
+  preBlocks: number;
 }
 
 export function readProbeLog(agent: string): ProbeRecord[] {
@@ -495,6 +509,7 @@ export function summariseProbeLog(recs: ProbeRecord[]): ProbeSummary {
     tools: {},
     stop: { allow: 0, blocks: 0, maxRun: 0, releases: 0, stopHookActive: [], slowStarts: 0, slowEnds: 0 },
     envNames: [],
+    preBlocks: 0,
   };
   const env = new Set<string>();
   const active = new Set<string>();
@@ -511,6 +526,8 @@ export function summariseProbeLog(recs: ProbeRecord[]): ProbeSummary {
       if (r.cwdIsGit) s.cwdIsGit++;
       if (r.cwdField) s.cwdField++;
       for (const n of r.envNames ?? []) env.add(n);
+    } else if (r.event === 'PreToolUse' && r.preBlock === 'deny') {
+      s.preBlocks++;
     } else if (r.event === 'PreToolUse' && r.tool) {
       const set = new Set(s.tools[r.tool] ?? []);
       for (const f of r.fields ?? []) set.add(f);
@@ -554,6 +571,7 @@ export function formatProbeSummary(agent: string, s: ProbeSummary): string {
   }
   const tools = Object.entries(s.tools);
   L.push(tools.length ? `  tool_input field names per tool: ${tools.map(([t, f]) => `${t}: ${f.join(', ') || '(none)'}`).join('; ')}.` : '  No PreToolUse probe record yet.');
+  L.push(s.preBlocks ? `  PreToolUse block probe: denied ${s.preBlocks} command(s) carrying ${PRE_BLOCK_WORD}. If the agent's reply shows that word echoed back, the command ran anyway and hooks cannot block on this agent.` : `  PreToolUse block probe: not tried yet (ask the agent to run: echo ${PRE_BLOCK_WORD}).`);
   const st = s.stop;
   if (st.blocks || st.releases || st.allow || st.slowStarts) {
     L.push(`  Stop probe: ${st.allow} plain stop(s); ${st.blocks} block(s) delivered, longest run ${st.maxRun} in a row, ${st.releases} release(s) after ${STOP_BLOCKS}; stop_hook_active seen as: ${st.stopHookActive.join(', ') || 'n/a'}.`);

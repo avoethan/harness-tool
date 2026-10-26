@@ -472,11 +472,15 @@ export function answerQuestion(b: BriefFile, n: number, answer: string, ctx: Int
     const nums = open.map((x) => x.n);
     throw new Error(nums.length ? `Q${n} is not an open question; open: ${nums.map((x) => 'Q' + x).join(', ')}` : 'this brief has no open questions');
   }
-  const recorded = stripHiddenUnicode(resolveAnswer(q, answer)).replace(/\s+/g, ' ').trim().slice(0, 500);
+  const resolved = stripHiddenUnicode(resolveAnswer(q, answer));
+  const recorded = resolved.replace(/\s+/g, ' ').trim().slice(0, 500);
   if (!recorded) throw new Error('the answer is empty');
+  // The ticket had no criteria: the answer *is* the criteria (or the title, when that option was chosen).
+  const added = !q.criterionId && q.topic === 'criteria' && !b.criteria.length ? criteriaFromAnswer(q, resolved, b.title) : null;
   const at = (ctx.now ?? new Date()).toISOString();
   // a person's answer replaces the recommended option that was taken for them
   const next: BriefFile = { ...b, clarifications: [...b.clarifications.filter((c) => !(c.key === q.key && c.unattended)), { n: q.n, key: q.key, ...(q.criterionId ? { criterionId: q.criterionId } : {}), topic: q.topic, q: q.text, a: recorded, at }] };
+  if (added) next.criteria = added.map((text, i) => ({ id: `AC${i + 1}`, text, kind: 'unit' }) as Criterion);
   let dropped = false;
   if (q.criterionId && /^drop it\b|\bout of scope\b|^drop\b/i.test(recorded)) {
     const c = b.criteria.find((x) => x.id === q.criterionId);
@@ -486,6 +490,21 @@ export function answerQuestion(b: BriefFile, n: number, answer: string, ctx: Int
     }
   }
   return { brief: reassemble(next, ctx), question: q, recorded, dropped };
+}
+
+/**
+ * The criteria an answer to "I found no acceptance criteria" gives: the title when that option was chosen;
+ * otherwise the answer's own text, with a leading option letter (`A)`, `A.`, `A:`) removed, one criterion
+ * per line, or per `;` when the answer is one line. Throws when only the "I will list them" option was chosen.
+ */
+export function criteriaFromAnswer(q: Question, answer: string, title: string): string[] {
+  const a = answer.trim();
+  if (a === q.options[1]) return [title];
+  if (a === q.options[0]) throw new Error('give the criteria themselves in the answer, for example --answer "README.md contains the line \\"second line\\"" (several: separate them with ;)');
+  const body = a.replace(/^(?:option\s+)?[A-Ja-j][).:]\s*/, '');
+  const parts = (body.includes('\n') ? body.split(/\r?\n/) : body.split(';')).map((x) => x.replace(/^\s*(?:[-*\u2022]|\d+[.)])\s*/, '').trim()).filter(Boolean);
+  if (!parts.length) throw new Error('the answer names no criterion');
+  return parts.map((x) => x.slice(0, 500));
 }
 
 /** Synthesize ticket text for a ledger task so personal tasks go through the same pipeline. */

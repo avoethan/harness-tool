@@ -222,3 +222,20 @@ test('ticket endpoints: several in order, a criterion naming a method uses that 
   assert.deepEqual(extractFacts('Add `GET /orders/:id/export.csv` returning CSV').routes, [{ method: 'GET', path: '/orders/:id/export.csv' }]);
   assert.deepEqual(extractFacts('Upload the file /tmp/x/report.csv').routes, [], 'a bare path ending like a file is still a file');
 });
+
+test('a ticket with no criteria: the answer to "What must be true when this is done?" becomes the criteria', () => {
+  const ctx = { config: { repos: cfgRepos }, defaultRepoPath: repo };
+  const empty = buildBrief('Add a second line to the README', ctx);
+  assert.equal(empty.criteria.length, 0);
+  const q = empty.questionDetails.find((x) => x.topic === 'criteria')!;
+  const one = answerQuestion(empty, q.n, 'A) README.md contains the line "second line".', ctx);
+  assert.deepEqual(one.brief.criteria.map((c) => c.text), ['README.md contains the line "second line".']);
+  assert.ok(!one.brief.questionDetails.some((x) => x.topic === 'criteria' && x.blocking), 'the criteria question is no longer open');
+  const two = answerQuestion(empty, q.n, 'The README has two lines; the first line is unchanged', ctx);
+  assert.deepEqual(two.brief.criteria.map((c) => c.text), ['The README has two lines', 'the first line is unchanged']);
+  const lines = answerQuestion(empty, q.n, '1. first criterion\n2. second criterion', ctx);
+  assert.deepEqual(lines.brief.criteria.map((c) => c.id), ['AC1', 'AC2']);
+  const title = answerQuestion(empty, q.n, 'B', ctx);
+  assert.deepEqual(title.brief.criteria.map((c) => c.text), ['Add a second line to the README']);
+  assert.throws(() => answerQuestion(empty, q.n, 'A', ctx), /give the criteria themselves/);
+});

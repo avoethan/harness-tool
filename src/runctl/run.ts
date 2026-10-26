@@ -25,6 +25,7 @@ import { instrument } from '../lib/log';
 import { runsDir } from '../lib/paths';
 import { stripHiddenUnicode } from '../lib/unicode';
 import { buildBrief, loadBrief, saveBrief, setCurrentTask, ticketTextForTask, type BriefFile } from '../intake/brief';
+import { recordStartSnapshot } from '../intake/localchanges';
 import { claimTask, DEFAULT_STALE_MINUTES, doneTask, nextTask, readLedger, withLedgerLock, writeTask, type LedgerTask } from '../intake/ledger';
 import { land, teamRefusal, type CiKind, type LandOptions, type LandResult } from '../land/land';
 import type { GateOutcome, GateRunner } from '../land/gaterun';
@@ -355,6 +356,12 @@ export function prepareTask(mainRoot: string, repoId: string, mainBranch: string
   saveBrief(brief);
   setCurrentTask(repoId, task.id);
   setCurrentTask(wtRepoId, task.id);
+  // The harness made this worktree: none of its changes are the user's notes, so nothing is left out.
+  try {
+    recordStartSnapshot(where, { repoId: wtRepoId, taskId: task.id, by: 'runner', empty: true, replace: true });
+  } catch {
+    /* without a snapshot the late one at the first gate run is guarded the same way */
+  }
   return { ok: true, task: claim.task, worktree: where, branch, reclaimed: claim.reclaimed };
 }
 

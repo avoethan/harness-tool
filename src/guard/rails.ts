@@ -69,6 +69,8 @@ export const HARNESS_ADMIN_SECOND: Record<string, Set<string>> = {
   // record, probe-mode and probe-hook write self-check evidence the user reads; only the user produces it
   selfcheck: new Set(['probe-files', 'record', 'probe-mode', 'probe-hook']),
   learn: new Set(['review']),
+  // re-recording the start snapshot after the agent's own edits would hide them from the gate
+  task: new Set(['snapshot']),
 };
 /** Subcommand and second word that are the user's only with one of these flags (the read form stays allowed). */
 export const HARNESS_ADMIN_SECOND_FLAGS: Record<string, Record<string, string[]>> = {

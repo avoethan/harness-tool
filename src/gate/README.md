@@ -64,6 +64,25 @@ harness gate prove-red [--task <id>] [--repo <path>] [--base <sha>] [--json]
   run). Hook modes: pre-commit uses HEAD and checks the *staged* tree;
   pre-push and ci use `--base`, else the merge-base with `origin/$GITHUB_BASE_REF`
   (ci), the upstream branch, the default branch, else `HEAD^`.
+- **Local changes present when the ticket started** are not the ticket's
+  (task mode with a brief; hook modes check what is staged or committed, so
+  they ignore it). The task's start snapshot
+  (`~/.harness/runs/<repoId>/<task>/start-snapshot.json`, written by intake,
+  `task claim`, or this gate's first run when there is none; see
+  src/intake/README.md) lists each path that had local changes then with its
+  git hash. `buildContext` drops from `ctx.diff` and `ctx.addedLines()` every
+  path whose current state equals its snapshot entry (`isTicketPath` /
+  `partitionChanges` in src/intake/localchanges.ts, the one place that
+  decides it), so the secret scan, tamper, standards, lint of changed files,
+  map-drift, the `gate`-kind scope paths and every cache key see only the
+  ticket's change. A recorded path that changed since, or was committed since
+  the start, is in and listed in `ctx.local.changedSince`; a path clean at the
+  start is in as before. The report prints one line with the count ("12 local
+  changes present when the ticket started were left out of this check"),
+  never the names; `--json` lists them under `localChanges` (`leftOut`,
+  `changedSince`, `withheld`), and `evidence.json` carries the counts
+  (`localChanges: {leftOut, changedSince}`). Steps that run the repository's
+  commands on the whole tree (build, typecheck, tests) still see the files.
 - **Configuration** comes from the machine config and the repository's
   `.harness/config.json` *as it was at the base commit*; lint/test/build
   commands come from `package.json` at the base commit (`git show
@@ -84,12 +103,16 @@ harness gate prove-red [--task <id>] [--repo <path>] [--base <sha>] [--json]
 | `e2e:<id>` | 8 | no `<id>-http` / `<id>-db` artefact for an api/db criterion, or one from an older tree, or one that records a failed check; a check whose command has `--db-unreachable` counts only artefacts with `dbUnreachable: true` ("needs an artefact from a `--db-unreachable` launch"); a `liveOptional` (status-only) check also passes on a passing test named `<id>:` in a test file that contains the route path, unless a fresh artefact on the current tree records a failure | the brief has no api or db checks |
 | `standards` | 4 | a block-mode ledger record is violated in a changed file or in a commit subject since the base (`declared` and `counted-strong` tiers block; other tiers warn and are listed as `warn:`). Each line: rule id, file:line, statement, fix | no ledger yet |
 | `lint` | 3 | ESLint errors and Prettier `--check` failures in the changed files (the repository's own binaries and config); else the base commit's `lint` script | no linter configured |
-| `typecheck` | 3 | `tsc -b` (project references) or `tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile ~/.harness/cache/<repoId>/tsbuildinfo`; the `typecheck` script when there is no tsconfig.json | no tsconfig.json and no typecheck script |
+| `typecheck` | 3 | the repository's own typecheck fails; in this order: the base commit's `typecheck`, `type-check`, `tsc`, `check:types` or `types` script; else `tsc -b` (tsconfig.json has project references); else `tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile ~/.harness/cache/<repoId>/tsbuildinfo` | no typecheck script and the `build` script runs tsc ("the build step checks the types"; a gate-proved check naming `typecheck` then follows `build`); no tsconfig.json and no typecheck script |
 | `build` | 3 | the base commit's `build` script fails | no build script |
 | `tests:base` | 5 | the base commit's `test` script fails on the test files that exist at the base (restricted to them for vitest and jest; the whole suite otherwise, said in the report) | no test script |
 | `acceptance:<id>` | 5 | a unit-kind criterion's test (named `"<id>: ..."`) was never proven red at this base commit, passed at the base, is missing, or fails now; a gate-proved criterion (`check.kind === 'gate'`) has no test: its named steps passed in this run, the change stays inside `scopePaths`, and the base commit is still an ancestor of HEAD; a green-at-base criterion (`check.greenAtBase`) needs only a test that exists and passes now | no brief, or no unit-kind criteria |
 | `coverage` | 6 | changed-line coverage (Istanbul `coverage/coverage-final.json`) below the base's line coverage | no `coverage`/`test:coverage`/`test:cov`/`cov` script |
 | `affected` | 9 | the affected packages' `test`/`lint` scripts fail (nx affected, turbo `--filter=...[base]`, or workspace packages holding changes plus their dependents) | single-package repository |
+
+A step can also end **`pre-existing`** (printed `PRE-EXISTING`): see
+"Failures already present at the base commit" below. It never FAILs the
+verdict.
 
 Rules that hold across steps:
 
@@ -109,6 +132,53 @@ Rules that hold across steps:
   (a step wrote an unignored file, or someone edited), the verdict is FAIL
   with the paths.
 
+## Failures already present at the base commit
+
+When `lint`, `typecheck`, `build`, `tests:base`, `coverage` (its script
+failing, not the changed-line comparison) or `affected` fails, the gate runs
+the same step, with the same command, files and filters, in a temporary
+checkout of the base commit (the same kind of checkout `prove-red` uses: git
+hooks off, the repository's node_modules linked in, nothing installed,
+removed afterwards) and compares the two failures (`src/gate/baseline.ts`):
+
+| Step | What identifies a failure |
+|---|---|
+| `typecheck` (tsc, or a script that prints tsc diagnostics) | each diagnostic: file relative to the repository, `TSnnnn` code, message with line and column numbers removed |
+| `lint` (ESLint, Prettier) | each problem: file, rule id (or `prettier`), message without line numbers; the base lints the same changed files that exist there |
+| `tests:base` | the exit code plus every failing test name (whitespace and durations removed), when the runner's output lists all of them; else as a script |
+| `build`, `coverage`, `affected`, a `lint` script, any other script | the exit code plus each failure line of the output (the lines `failureLines` picks), with digits and the checkout folder removed; `affected` per package script |
+
+- **`pre-existing`** only when every current failure is also present at the
+  base, counted (a second copy of an error the base has once is new). The
+  report shows the step as `PRE-EXISTING` with the failures it found, the
+  count line adds "N already failing at the base commit (pre-existing)", the
+  verdict can still be PASS, the Stop hook lets the agent stop, and the
+  write-up lists the step under "Already failing before this change" in its
+  Verification section.
+- **Any new failure FAILs** as before, and the reasons name only the new
+  ones: "<what ran>: 1 new since the base commit; 3 already failing at the
+  base commit <sha> left out".
+- **A base that cannot be evaluated never makes a failure pre-existing**:
+  the checkout fails, the step is skipped, times out or fails without a
+  comparable result there (for example missing dependencies), it reports its
+  failures in another form (diagnostics now, a crash at the base), or the
+  exit code differs. The step keeps failing with today's reasons plus one
+  line: "the base commit <sha> could not be checked for comparison (<why>),
+  so every failure above counts as new". A failure that ran nothing (a tool
+  declared but not installed, a refused script) or timed out is never
+  compared.
+- Paths are compared with `/` separators, without the repository or
+  checkout folder, and lines without carriage returns, so Windows output
+  compares the same way.
+- **Once per ticket**: one checkout serves every failing step of a gate run,
+  and each step's base result is cached per base commit and command in
+  `~/.harness/cache/<repoId>/baseline-<sha>.json`, so later runs do not
+  check the base out again. A base run's failure is not cached when it could
+  not be evaluated.
+- The secret scan is not compared with the base: it scans only the lines the
+  change adds, so a secret on a line the change leaves as it was is never
+  flagged.
+
 **Allowed protected paths**: a unit path of the brief that itself names a
 protected file or folder (a ticket naming `.github/workflows/ci.yml`; a
 ticket naming `src/` does not open the snapshots under it), the brief's
@@ -117,7 +187,7 @@ commit.
 
 ## Verdicts, attempts and the cap
 
-- **PASS** when every step that ran passed (skips are listed with reasons).
+- **PASS** when every step that ran passed or is `pre-existing` (skips are listed with reasons).
 - **FAIL(reasons)**: every failing step's reasons, prefixed with the step name.
 - **BLOCKED(reason)**: `harness gate --blocked "<reason>"`. A legitimate
   outcome; the tamper and secret steps still run and their findings are
@@ -143,9 +213,12 @@ commit.
 ```
 ~/.harness/runs/<repoId>/<task>/evidence.json     EvidenceFile (src/types.ts)
 ~/.harness/runs/<repoId>/<task>/gate-cache.json   { version, entries: { <step>: { key, status, reasons, durationMs, at } } }
+~/.harness/runs/<repoId>/<task>/start-snapshot.json  the task's start snapshot (read; written here only when the task has none)
 ~/.harness/runs/<repoId>/<task>/e2e/*.json        E2E artefacts (written by harness verify; read here)
 ~/.harness/cache/<repoId>/tsbuildinfo             incremental typecheck state (nothing written in the repository)
+~/.harness/cache/<repoId>/tsbuildinfo-base        the same for typecheck runs in a base checkout
 ~/.harness/cache/<repoId>/coverage-base-<sha>.json  the base commit's line coverage, measured once
+~/.harness/cache/<repoId>/baseline-<sha>.json     each step's result at the base commit (pre-existing failures), by command
 ~/.harness/featuremap/<repoId>/overlay.json       feature-map overlay (written by harness verify; read here)
 ```
 
@@ -153,10 +226,11 @@ commit.
 write-tree` of the working tree through a temporary index, identical to the
 hash the Stop hook computes; the staged tree in pre-commit mode), `reasons`,
 `attempt`, `cap_reached`. Also: `repo`, `task`, `baseSha`, `steps[]` (`name`,
-`status` pass|fail|skip|cached, `durationMs`, `reasons`, `cacheKey`, `cache`
+`status` pass|fail|skip|cached|pre-existing, `durationMs`, `reasons`, `cacheKey`, `cache`
 hit|miss|off), `startedAt`, `finishedAt`, `e2e[]` (`id`, `kind`, `path`
 relative to the run folder, `treeHash`, `createdAt`), `phase`, `sessionId`
-(`--session` or `HARNESS_SESSION_ID`).
+(`--session` or `HARNESS_SESSION_ID`), `localChanges` (counts, when the run
+left out or re-checked local changes present at the start).
 
 **Cache**: a step's key hashes the step name, the base commit, the gate's
 config and code version, and the blobs of the inputs that step reads (a
@@ -270,12 +344,24 @@ What to do next:
 Evidence: ~/.harness/runs/orders-api-a4a0fe/t-status-filter/evidence.json
 ```
 
+Since then, `typecheck` prefers the repository's own script: on this
+workspace the line reads `PASS  typecheck ... ran \`tsc -p tsconfig.json
+--noEmit\` (the repository's \`typecheck\` script, ... ms)`.
+
 Running it again without a change took 224 ms wall: every step except the
 skips came from the cache. The acceptance test (`test/acceptance/gate.test.ts`)
 records the full numbers on the stand-in.
 
 ## Limits
 
+- A start snapshot the gate takes itself (a task with no snapshot yet)
+  records only local changes older than the brief and not edited by an agent
+  session; a note you wrote after intake and before the first gate run counts
+  as part of the change until you run `harness task snapshot` yourself.
+- The Stop hook still compares the whole working tree with the evidence's
+  tree hash, so editing your own note after a PASS asks the agent to run the
+  gate again (the rerun leaves the note out while it is unchanged since the
+  snapshot, or checks it when it changed).
 - The tests-phase rule compares file modification times with the phase
   switch in `phase.json`; a checkout or stash that rewrites test files during
   the implement phase looks like an edit.

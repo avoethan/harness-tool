@@ -303,6 +303,29 @@ The agent never pushes and never opens a pull request; both are blocked in
 the team setting. You review, commit on a branch, push and open the pull
 request yourself.
 
+### Your own local files in repositories
+
+Keep your notes, investigations and drafts inside a repository if you like.
+When the ticket starts (`harness intake`), the harness records which files
+already had local changes, with a hash of each and no content, and the gate,
+its secret scan and the write-up leave them out as long as they stay as they
+were. `harness intake show` and the gate print only how many were left out;
+`harness gate --json` lists them for you.
+
+- A file you had changed before that changes again during the ticket is
+  checked again, and the write-up marks it "changed during the ticket (you
+  had local changes in it before)".
+- If you edit your notes on purpose mid-ticket, record them again yourself,
+  in a terminal in that repository: `harness task snapshot` (add
+  `--task <id>` when the repository's current task is another one). The
+  agent cannot run it: an agent re-recording after its own edits would hide
+  them, so the harness blocks it for every agent.
+- Files an agent edited in the last 12 hours, and files changed after the
+  ticket started, are never recorded automatically; they stay part of the
+  change until you run `harness task snapshot`.
+- Commit nothing of yours on the task branch: a recorded file that is
+  committed is part of the change again.
+
 ## 6. What the write-up looks like
 
 ```

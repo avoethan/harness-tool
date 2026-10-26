@@ -57,14 +57,18 @@ harness report only says which steps you confirmed and which differed.
 says **Devin Local**. Open Help → About and note the version. Open your
 workspace folder and look for a Restricted Mode banner.
 
-**Expect:** Devin Local, version 3.9.19 or later, and no Restricted Mode
-banner.
+**Expect:** Devin Local in the selector and no Restricted Mode banner. The
+About box shows the app's own number ("Devin Desktop Version", for example
+1.96.101 on 2026-10-26) above the VS Code OSS and Electron versions; Devin's
+documentation names the agent's minimum as Devin Local 3.9.19, a different
+numbering the About box does not show. Record the Devin Desktop version you
+see; whether the hooks run is what step 2 and step 4 prove.
 
-**If different:** An older version: update Devin first. A Restricted Mode
+**If different:** Step 2 or step 4 fails: update Devin first. A Restricted Mode
 banner: trust the folder. In Restricted Mode no hook runs, so none of the
 harness rails and no done-gate check apply.
 
-**Record:** `harness selfcheck record --agent devin --step 1 --result "pass: Devin Local <version>, folder trusted"`
+**Record:** `harness selfcheck record --agent devin --step 1 --result "pass: Devin Desktop <version>, Devin Local, folder trusted"`
 
 ### Step 2 · harness doctor sees the Devin hooks (`doctor`)
 
@@ -84,7 +88,9 @@ hooks refuse to work until it is fixed; follow the `fix:` line under it.
 ### Step 3 · Write the probe files (`probe-files`)
 
 **Do:** Run `harness selfcheck probe-files --agent devin`. Then quit and
-reopen Devin desktop so it reads the new hooks.
+reopen Devin desktop so it reads the new hooks: quit it fully, including the
+tray icon by the clock (closing the window can leave it running with the old
+hooks).
 
 **Expect:** Two lines, one for `AGENTS.md` ("marker block with the size
 probe") and one for `config.json` ("probe hooks: SessionStart, PreToolUse,
@@ -152,7 +158,7 @@ long `AGENTS.md` is not read; `harness assess` reports files over that size.
 **If different:** `MARKER-TAIL-PROBE` is listed: your Devin version reads
 past 16 KiB; record the version with the result.
 
-**Record:** `harness selfcheck record --agent devin --step 5 --result "pass: tail marker listed"` (or `fail: tail marker missing`)
+**Record:** `harness selfcheck record --agent devin --step 5 --result "pass: tail marker not listed"` (or `fail: tail marker listed`)
 
 ### Step 6 · DEVIN_PROJECT_DIR in a folder that is not a git repository (`project-dir`)
 
@@ -206,7 +212,13 @@ repository has no remote). Then a PreToolUse hook cannot block on Devin and
 the rails do not hold. Stop using the harness with Devin until this is
 resolved; check steps 1 and 2 first.
 
-**Record:** `harness selfcheck record --agent devin --step 8 --result "pass: blocked with the harness reason"`
+**If the agent refuses before trying** (its instructions forbid force-pushes, so it often declines on its own and the hook never sees the command): use the block probe instead, a harmless command no instruction mentions. In the same session, send:
+
+> Run exactly this command and show me its output: echo harness-pre-block-probe
+
+Expect: the command does not run; Devin shows that a hook blocked it ("MARKER-PRE-BLOCK-PROBE: the harness self-check blocked this command on purpose"). `harness selfcheck probe-log --agent devin` then says "PreToolUse block probe: denied 1 command(s)". If the reply shows `harness-pre-block-probe` echoed back, the command ran and a PreToolUse hook cannot block on this Devin: stop using the harness with Devin until it is resolved.
+
+**Record:** `harness selfcheck record --agent devin --step 8 --result "pass: blocked with the harness reason"` (or `"pass: block probe denied, did not run"`)
 
 ### Step 9 · The Stop hook asks for the done-gate (`stop-gate`)
 

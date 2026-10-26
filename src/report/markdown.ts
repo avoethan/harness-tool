@@ -55,6 +55,7 @@ function taskCells(t: TaskReportRow): Array<string | number> {
     t.criteria,
     t.checksRun,
     t.checksFailedThenFixed,
+    t.checksPreExisting ?? 0,
     t.gateVerdict === 'none' ? 'no run' : t.gateVerdict,
     t.gateRuns ?? 0,
     t.verificationEvidence,
@@ -85,12 +86,12 @@ export function renderMarkdown(r: Report): string {
 
   L.push('## Tasks', '', SECTION_TEXT.tasks);
   L.push(
-    'Checks run counts gate steps that ran; failed then fixed counts steps that failed in some gate run and pass now; steering messages are user prompts after the first in each session tied to the task; rework rounds come from the work log.',
+    'Checks run counts gate steps that ran; failed then fixed counts steps that failed in some gate run and pass now; already failing at base counts steps whose latest result failed the same way at the base commit (pre-existing, not caused by the task); steering messages are user prompts after the first in each session tied to the task; rework rounds come from the work log.',
     '',
   );
-  const head = ['Ticket', 'Criteria', 'Checks run', 'Failed then fixed', 'Gate verdict', 'Gate runs', 'Verification evidence', 'Standards flagged', 'Clarifications asked', 'Repeat corrections', 'Steering messages', 'Rework rounds', 'Outcome'];
+  const head = ['Ticket', 'Criteria', 'Checks run', 'Failed then fixed', 'Already failing at base', 'Gate verdict', 'Gate runs', 'Verification evidence', 'Standards flagged', 'Clarifications asked', 'Repeat corrections', 'Steering messages', 'Rework rounds', 'Outcome'];
   const rows = r.tasks.map(taskCells);
-  if (!rows.length) rows.push(['none', 0, 0, 0, 'no run', 0, 0, 0, 0, 0, 0, 'not logged', 'none']);
+  if (!rows.length) rows.push(['none', 0, 0, 0, 0, 'no run', 0, 0, 0, 0, 0, 0, 'not logged', 'none']);
   L.push(...table(head, rows), '');
 
   const pt = r.perTicket ?? [];

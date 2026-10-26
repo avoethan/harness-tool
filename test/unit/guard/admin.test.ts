@@ -63,6 +63,15 @@ const DENY = [
   // Red-team: `npx <this package name>` resolves to the harness CLI.
   'npx agent-harness uninstall',
   'npx --no-install agent-harness config set setting personal',
+  // The start snapshot: re-recording it after the agent's own edits would hide them from the gate.
+  'harness task snapshot',
+  'harness task snapshot --task T-003',
+  'harness task snapshot --repo . --task T-003',
+  'harness task --repo . snapshot',
+  'harness db --server prod-db mark --test',
+  'harness task --task T-003 snapshot --json',
+  'node /opt/tools/harness/dist/src/cli.js task snapshot --task T-003',
+  'bash -c "harness task snapshot"',
 ];
 
 const ALLOW = [
@@ -80,6 +89,8 @@ const ALLOW = [
   'harness learn stats',
   'harness intake --from -',
   'harness task next',
+  'harness task claim T-003 --by claude',
+  'harness task list --status todo',
   'harness writeup',
   'harness phase tests',
   'harness selfcheck',
@@ -134,6 +145,21 @@ test('self-check evidence commands are the user\'s: record, probe-mode, probe-ho
       assert.equal(d.rail, 'harness-admin');
     }
   }
+});
+
+test('harness task snapshot is the user\'s for Claude, Codex and Devin; the other task subcommands stay the agent\'s', () => {
+  for (const c of ['harness task snapshot', 'harness task snapshot --task T-1', 'harness task --repo . snapshot']) {
+    for (const agent of ['claude', 'codex', 'devin'] as const) {
+      const d = evaluate({ ...base, agent, toolName: agent === 'devin' ? 'exec' : 'Bash', toolInput: { command: c } });
+      assert.equal(d.decision, 'deny', `${agent}: ${c}`);
+      assert.equal(d.rail, 'harness-admin');
+    }
+  }
+  const { buildPermissions } = require('../../../src/guard/permissions') as typeof import('../../../src/guard/permissions');
+  const p = buildPermissions({ setting: 'personal', protectedRoots: ['/tmp/hh'] });
+  assert.ok(p.claude.deny.includes('Bash(harness task snapshot *)'));
+  assert.ok(p.devin.deny.includes('Exec(harness task snapshot)'));
+  assert.equal(run('harness task add --title "fix the snapshot export"').decision, 'allow');
 });
 
 test('permission rules carry the self-check admin prefixes for every agent', () => {

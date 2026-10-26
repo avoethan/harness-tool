@@ -481,7 +481,12 @@ export type Verdict = 'PASS' | 'FAIL' | 'BLOCKED';
 
 export interface GateStep {
   name: string;
-  status: 'pass' | 'fail' | 'skip' | 'cached';
+  /**
+   * `pre-existing`: the step fails, but every failure it reports is also
+   * present at the base commit (src/gate/baseline.ts); it does not fail the
+   * verdict and the write-up lists it under "Already failing before this change".
+   */
+  status: 'pass' | 'fail' | 'skip' | 'cached' | 'pre-existing';
   durationMs: number;
   reasons?: string[];
   cacheKey?: string;
@@ -520,6 +525,11 @@ export interface EvidenceFile {
    */
   cap_reached?: boolean;
   cap_reached_at?: string;
+  /**
+   * Local changes present when the ticket started (counts only; src/intake/localchanges.ts):
+   * left out of this check, and recorded paths that changed during the ticket (checked).
+   */
+  localChanges?: { leftOut: number; changedSince: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -586,6 +596,8 @@ export interface CheckSpec {
   scopePaths?: string[];
   /** `gate` checks: the brief's base commit stays an ancestor of HEAD (no rebase, no force-push, no rewrite). */
   keepsHistory?: boolean;
+  /** `gate` checks: a repo-relative file must contain this exact text in the working tree (read by the gate; no test runner needed). */
+  fileContains?: { path: string; text: string };
   /** Written by `harness gate prove-red`: the run at the base commit that proved (or failed to prove) the check red. */
   redProof?: RedProof;
 }
@@ -708,6 +720,8 @@ export interface TaskReportRow {
   criteria: number;
   checksRun: number;
   checksFailedThenFixed: number;
+  /** Steps whose latest result is `pre-existing` (failing the same way at the base commit); present only when there are any. */
+  checksPreExisting?: number;
   gateVerdict: Verdict | 'none';
   verificationEvidence: number;
   standardsFlagged: number;

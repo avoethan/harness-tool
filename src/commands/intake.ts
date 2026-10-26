@@ -33,6 +33,7 @@ import { instrument } from '../lib/log';
 import { nearestRepoRoot } from '../lib/git';
 import { formatQuestionsBlock } from '../intake/ambiguity';
 import { UNMAPPED } from '../intake/units';
+import { briefSnapshots, recordBriefSnapshots, snapshotLines } from '../intake/localchanges';
 import {
   answerQuestion,
   briefPath,
@@ -84,12 +85,13 @@ function repoName(b: BriefFile, id: string): string {
 }
 
 /** Plain-language rendering of a brief. */
-export function renderBrief(b: BriefFile): string {
+export function renderBrief(b: BriefFile, local: string[] = snapshotLines(briefSnapshots(b))): string {
   const out: string[] = [];
   out.push(`Brief ${b.id}: ${b.title}`);
   out.push(`Saved: ${briefPath(b.id)}`);
   if (b.repos.length) out.push(`Repos: ${b.repos.map((r) => repoName(b, r)).join(', ')} (current task set to ${b.id})`);
   else out.push('Repos: none mapped yet (see "To find out by running")');
+  out.push(...local);
   out.push('');
   out.push(`Acceptance criteria (${b.criteria.length}):`);
   for (const c of b.criteria) {
@@ -360,6 +362,8 @@ export async function main(argv: string[]): Promise<number> {
   const b = buildBrief(text, { ...ctx, ...(jiraKey ? { jiraKey } : {}) });
   saveBrief(b);
   setCurrent(b);
+  // Local changes already in the repositories (the user's notes) are not the ticket's (src/intake/localchanges.ts).
+  recordBriefSnapshots(b, 'intake');
   logBrief('intake.brief', b, { lowConfidence: Object.values(b.criteriaMeta).filter((m) => m.parseConfidence < 0.7).length, hiddenRemoved: b.hiddenRemoved });
   logLint(b);
   process.stdout.write(json ? JSON.stringify(b, null, 2) + '\n' : renderBrief(b));

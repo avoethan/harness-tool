@@ -88,9 +88,33 @@ export function gateStepsIn(text: string): string[] {
   return ALL_STEPS.filter((s) => steps.has(s));
 }
 
+const QUOTED = /"([^"\n]{1,200})"|`([^`\n]{1,200})`|'([^'\n]{1,200})'|\u201c([^\u201d\n]{1,200})\u201d/;
+
+/**
+ * "<file> contains (the line|the text|...) <quoted text>" or "<quoted text> (is|appears) in <file>":
+ * the gate reads the file itself, so a docs or config criterion needs no test runner.
+ */
+export function fileContainsIn(text: string): { path: string; text: string } | undefined {
+  const t = text.trim().replace(/\.$/, '');
+  const pathTok = '(`[^`]+`|[\\w./-]+)';
+  const a = new RegExp(`^(?:the\\s+(?:file\\s+)?)?${pathTok}\\s+(?:now\\s+)?(?:contains|includes|has)\\s+(?:the\\s+)?(?:line|text|words?|sentence|heading|entry|string)?\\s*(.+)$`, 'i').exec(t);
+  const b = new RegExp(`^(.+?)\\s+(?:is|appears|is\\s+present|is\\s+listed)\\s+in\\s+(?:the\\s+(?:file\\s+)?)?${pathTok}$`, 'i').exec(t);
+  const pick = (p: string, rest: string) => {
+    const file = p.replace(/^`|`$/g, '');
+    if (!looksLikePath(file)) return undefined;
+    const q = QUOTED.exec(rest);
+    const want = q ? (q[1] ?? q[2] ?? q[3] ?? q[4]) : undefined;
+    return want ? { path: file.replace(/^\.\//, ''), text: want } : undefined;
+  };
+  return (a && pick(a[1], a[2])) || (b && pick(b[2], b[1])) || undefined;
+}
+
 /** The gate check for a criterion the gate proves by itself, or undefined when the criterion needs a test. */
 export function gateSpec(text: string, facts: CriterionFacts, ticket?: TicketText): CheckSpec | undefined {
-  if (namesBehaviour(facts)) return undefined;
+  const contains = fileContainsIn(text);
+  // the quoted text of a file-contains criterion is read as a command by the command-line rule; it is not one
+  const factsHere = contains ? { ...facts, commands: facts.commands.filter((c) => c !== contains.text) } : facts;
+  if (namesBehaviour(factsHere)) return undefined;
   const steps = PASS_CLAIM.test(text) && onlyCheckWords(text) ? gateStepsIn(text) : [];
   const history = KEEPS_HISTORY.test(text);
   let scopePaths: string[] | undefined;
@@ -99,11 +123,12 @@ export function gateSpec(text: string, facts: CriterionFacts, ticket?: TicketTex
     scopePaths = named.length ? named : facts.paths.length ? [...facts.paths] : undefined;
   }
   // only a criterion with something the gate can check is a gate check
-  if (!steps.length && !scopePaths?.length && !history) return undefined;
+  if (!steps.length && !scopePaths?.length && !history && !contains) return undefined;
   const what: string[] = [];
   if (steps.length) what.push(`${steps.join(', ')} ${steps.length === 1 ? 'passes' : 'pass'} in this run`);
   if (scopePaths?.length) what.push(`the change touches only ${scopePaths.join(', ')}`);
   if (history) what.push('the base commit stays in the history (no rewrite)');
+  if (contains) what.push(`${contains.path} contains "${contains.text}"`);
   return {
     kind: 'gate',
     description: `proved by the gate: ${what.join('; ')}`,
@@ -111,6 +136,7 @@ export function gateSpec(text: string, facts: CriterionFacts, ticket?: TicketTex
     ...(steps.length ? { gateSteps: steps } : {}),
     ...(scopePaths?.length ? { scopePaths } : {}),
     ...(history ? { keepsHistory: true } : {}),
+    ...(contains ? { fileContains: contains } : {}),
   };
 }
 

@@ -122,3 +122,16 @@ test('scope: the ticket\'s changed path is read from sentences about changing, n
   assert.equal(hist?.keepsHistory, true);
   assert.equal(hist?.scopePaths, undefined);
 });
+
+test('"<file> contains the line \\"…\\"" and "\\"…\\" appears in <file>" are gate checks that read the file', () => {
+  for (const [text, path, want] of [
+    ['README.md contains the line "second line".', 'README.md', 'second line'],
+    ['docs/SETUP.md includes the text `npm.cmd ci`', 'docs/SETUP.md', 'npm.cmd ci'],
+    ['"HARNESS_JIRA_TOKEN" appears in docs/TEAM-SETUP.md', 'docs/TEAM-SETUP.md', 'HARNESS_JIRA_TOKEN'],
+  ] as const) {
+    const spec = gateSpec(text, extractFacts(text));
+    assert.equal(spec?.kind, 'gate', text);
+    assert.deepEqual(spec?.fileContains, { path, text: want }, text);
+  }
+  assert.equal(gateSpec('README.md contains setup steps', extractFacts('README.md contains setup steps'))?.fileContains, undefined, 'no quoted text: not a file-contains check');
+});

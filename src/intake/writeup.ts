@@ -28,12 +28,15 @@ import { readPhaseRecord, type PhaseRecord } from './phase';
 import { UNMAPPED } from './units';
 import { gateWhat } from './gatecheck';
 import { isTestFile } from '../gate/context';
+import { committedSince, indexOf, partitionChanges, readStartSnapshot, treeStates, workingTreeOf, type StartSnapshot } from './localchanges';
 
 export interface FileChange {
   status: string;
   file: string;
   added?: number;
   removed?: number;
+  /** The path had local changes when the ticket started and changed again during it. */
+  localBefore?: boolean;
 }
 
 export interface RepoWork {
@@ -75,6 +78,7 @@ function idRe(id: string): RegExp {
 }
 
 function stepResult(s: GateStep): string {
+  if (s.status === 'pre-existing') return 'already failing before this change (pre-existing)';
   return s.status === 'pass' ? 'PASS' : s.status === 'fail' ? 'FAIL' : s.status === 'cached' ? 'PASS (cached)' : 'skipped';
 }
 
@@ -167,7 +171,7 @@ export function renderWriteup(input: WriteupInput, work: RepoWork): string {
     for (const ch of work.changes.slice(0, 40)) {
       const counts = ch.added !== undefined || ch.removed !== undefined ? ` (+${ch.added ?? 0} -${ch.removed ?? 0})` : '';
       const st = { A: 'added', D: 'deleted', M: 'modified', R: 'renamed', '?': 'new, untracked' }[ch.status[0] as 'A'] ?? ch.status;
-      L.push(`- \`${ch.file}\` ${st}${counts}`);
+      L.push(`- \`${ch.file}\` ${st}${counts}${ch.localBefore ? ' - changed during the ticket (you had local changes in it before)' : ''}`);
     }
     if (work.changes.length > 40) L.push(`- and ${work.changes.length - 40} more file(s)`);
     // Pre-existing tests the change edited (not new ones): a reviewer should read these first, because an
@@ -232,6 +236,12 @@ export function renderWriteup(input: WriteupInput, work: RepoWork): string {
     L.push(`Gate: ${ev.verdict} at tree ${ev.treeHash.slice(0, 12)}, attempt ${ev.attempt}, ${ev.finishedAt}${work.evidenceStale ? ' - the code changed after this run; run `harness gate` again' : ''}.`);
     if (ev.reasons.length && ev.verdict !== 'PASS') L.push(`Reasons: ${ev.reasons.map((r) => short(r, 120)).join('; ')}`);
     if (ev.steps.length) L.push(`Steps: ${ev.steps.map((s) => `${s.name} ${s.status}`).join(', ')}`);
+  }
+  const preExisting = ev?.steps.filter((s) => s.status === 'pre-existing') ?? [];
+  if (preExisting.length) {
+    L.push('', '### Already failing before this change');
+    L.push(`These checks fail the same way at the base commit ${ev!.baseSha.slice(0, 10)}, so this change did not cause them and they did not fail the gate; nothing in them is new.`);
+    for (const s of preExisting) L.push(`- ${s.name}: ${short((s.reasons ?? []).slice(1, 6).join('; ') || s.reasons?.[0] || 'failing at the base commit', 300)}`);
   }
   L.push('');
   L.push('| Criterion | Check | Result | Artifact |', '|---|---|---|---|');
@@ -353,22 +363,30 @@ export function readEvidence(repoId: string, taskId: string): EvidenceFile | nul
   return { ...e, e2e: Array.isArray(e.e2e) ? e.e2e : [], reasons: Array.isArray(e.reasons) ? e.reasons : [] };
 }
 
-/** Changed files against a base commit: tracked changes in the working tree plus untracked files. Names and counts only. */
-export function diffAgainst(repoPath: string, base: string): FileChange[] {
+/**
+ * Changed files against a base commit: tracked changes in the working tree plus untracked files. Names and
+ * counts only. With the task's start snapshot, local changes present when the ticket started and unchanged
+ * since are left out, and a recorded path that changed since is marked `localBefore`
+ * (the decision is `partitionChanges` in src/intake/localchanges.ts, the same one the gate uses).
+ */
+export function diffAgainst(repoPath: string, base: string, snapshot?: StartSnapshot | null): FileChange[] {
   const ok = rawGit(repoPath, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`], 5000).code === 0;
   const b = ok ? base : 'HEAD';
   const out = new Map<string, FileChange>();
-  const ns = rawGit(repoPath, ['diff', '--name-status', '--no-renames', b], 30000);
+  // -z: paths come raw (spaces, non-ASCII), never quoted.
+  const ns = rawGit(repoPath, ['diff', '--name-status', '-z', '--no-renames', b], 30000);
   if (ns.code === 0) {
-    for (const line of ns.stdout.split(/\r?\n/)) {
-      const m = /^([A-Z])\d*\t(.+)$/.exec(line);
-      if (m) out.set(m[2], { status: m[1], file: m[2] });
+    const parts = ns.stdout.split('\0');
+    for (let i = 0; i + 1 < parts.length; i += 2) {
+      const st = parts[i];
+      const file = parts[i + 1];
+      if (st && file && /^[A-Z]/.test(st)) out.set(file, { status: st[0], file });
     }
   }
-  const num = rawGit(repoPath, ['diff', '--numstat', '--no-renames', b], 30000);
+  const num = rawGit(repoPath, ['diff', '--numstat', '-z', '--no-renames', b], 30000);
   if (num.code === 0) {
-    for (const line of num.stdout.split(/\r?\n/)) {
-      const m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line);
+    for (const rec of num.stdout.split('\0')) {
+      const m = /^(\d+|-)\t(\d+|-)\t(.+)$/s.exec(rec);
       if (!m) continue;
       const ch = out.get(m[3]) ?? { status: 'M', file: m[3] };
       if (m[1] !== '-') ch.added = Number(m[1]);
@@ -376,9 +394,23 @@ export function diffAgainst(repoPath: string, base: string): FileChange[] {
       out.set(m[3], ch);
     }
   }
-  const un = rawGit(repoPath, ['ls-files', '--others', '--exclude-standard'], 30000);
-  if (un.code === 0) for (const f of un.stdout.split(/\r?\n/).filter(Boolean)) if (!out.has(f)) out.set(f, { status: '?', file: f });
-  return [...out.values()].sort((a, b2) => a.file.localeCompare(b2.file));
+  const un = rawGit(repoPath, ['ls-files', '-z', '--others', '--exclude-standard'], 30000);
+  if (un.code === 0) for (const f of un.stdout.split('\0').filter(Boolean)) if (!out.has(f)) out.set(f, { status: '?', file: f });
+  let changes = [...out.values()];
+  const idx = indexOf(snapshot ?? null, snapshot ? committedSince(repoPath, snapshot.base, headOf(repoPath)) : []);
+  if (idx) {
+    const tree = workingTreeOf(repoPath);
+    const states = tree ? treeStates(repoPath, tree) : new Map<string, string>();
+    const split = partitionChanges(changes.map((c) => ({ ...c, path: c.file })), idx, (p) => states.get(p) ?? null);
+    const marked = new Set(split.changedSince);
+    changes = split.kept.map(({ path: _p, ...c }) => (marked.has(c.file) ? { ...c, localBefore: true } : c));
+  }
+  return changes.sort((a, b2) => a.file.localeCompare(b2.file));
+}
+
+function headOf(repoPath: string): string | null {
+  const r = rawGit(repoPath, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], 5000);
+  return r.code === 0 ? r.stdout.trim() : null;
 }
 
 /** Evidence, diff, branch and phase for one repo of a brief. */
@@ -390,7 +422,7 @@ export function gatherRepoWork(brief: BriefFile, repoId: string, name: string, r
   if (repoPath && isGitRepo(repoPath)) {
     const base = evidence?.baseSha || brief.baseShas[repoId] || 'HEAD';
     work.baseSha = base;
-    work.changes = diffAgainst(repoPath, base);
+    work.changes = diffAgainst(repoPath, base, readStartSnapshot(repoId, brief.id));
     const br = currentBranch(repoPath);
     if (br) work.branch = br;
     if (evidence?.treeHash) {

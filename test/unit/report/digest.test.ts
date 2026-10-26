@@ -89,6 +89,7 @@ before(() => {
   const ev2 = readJson(e2);
   ev2.verdict = 'BLOCKED';
   ev2.reasons = [`needs the database; saw token=${SECRET} in the environment`];
+  ev2.localChanges = { leftOut: 4, changedSince: 1 };
   putJson(e2, ev2);
 
   // Events: denials by rail (T1's session s1, T2's session s2), runner sessions and cost.
@@ -166,6 +167,14 @@ test('a task without run.json, landing or pr records says so; the optional expec
   assert.match(text, /No landing record\./);
   assert.match(text, /No pull request record\./);
   assert.match(text, /Cost: not recorded\./);
+});
+
+test('the digest counts the local changes the gate left out (counts only, from evidence.json)', () => {
+  const { d1, d2 } = digests();
+  assert.deepEqual(d2.repos[0].localChanges, { leftOut: 4, changedSince: 1 });
+  assert.equal(d1.repos[0].localChanges, undefined);
+  assert.match(renderDigest(d2), /Local changes present when the ticket started: 4 left out of the gate, 1 changed during the ticket and checked\./);
+  assert.doesNotMatch(renderDigest(d1), /Local changes present/);
 });
 
 test('the rendered digest has its sections and carries names and counts only', () => {

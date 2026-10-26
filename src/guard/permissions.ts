@@ -77,6 +77,7 @@ const NON_GIT_PREFIXES: Partial<Record<RailId, string[][]>> = {
     ['harness', 'selfcheck', 'probe-mode'],
     ['harness', 'selfcheck', 'probe-hook'],
     ['harness', 'selfcheck', 'probe-log', '--clear'],
+    ['harness', 'task', 'snapshot'],
   ],
   opaque: [],
   internal: [],

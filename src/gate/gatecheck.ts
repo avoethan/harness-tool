@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+import { readTextOr } from '../lib/fsx';
 /**
  * The acceptance step for a `gate` check (CheckSpec.kind === 'gate'): a
  * criterion the gate proves by itself, with no test. It reads three things and
@@ -44,12 +46,20 @@ export function inScope(p: string, scope: string[]): boolean {
   });
 }
 
-function stepProblem(name: string, steps: GateStep[]): { ok: boolean; note?: string; problem?: string } {
+/** Whether a named step counts for a gate-proved check in this run. */
+export function stepProblem(name: string, steps: GateStep[], depth = 0): { ok: boolean; note?: string; problem?: string } {
   const s = steps.find((x) => x.name === name);
   if (!s) return { ok: false, problem: `step ${name} did not run in this gate run` };
   if (s.status === 'pass' || s.status === 'cached') return { ok: true };
   if (s.status === 'fail') return { ok: false, problem: `step ${name} failed${s.reasons?.[0] ? ` (${s.reasons[0].slice(0, 160)})` : ''}` };
+  // The same failures are at the base commit and nothing is new: this change did not break the step.
+  if (s.status === 'pre-existing') return { ok: true, note: `${name} fails the same way at the base commit (pre-existing, nothing new), counted as not broken by this change` };
   const why = s.reasons?.[0] ?? 'no reason given';
+  // typecheck skipped because the build script runs tsc: the build step stands for it.
+  if (name === 'typecheck' && /build step checks the types/.test(why) && depth === 0) {
+    const b = stepProblem('build', steps, 1);
+    return b.ok ? { ok: true, note: `typecheck is covered by the build step (the build script runs tsc)${b.note ? `; ${b.note}` : ''}` } : { ok: false, problem: `typecheck is covered by the build step, and ${b.problem}` };
+  }
   if (NOT_APPLICABLE.test(why)) return { ok: true, note: `${name} was skipped (${why.slice(0, 120)}), counted as passed` };
   return { ok: false, problem: `step ${name} was skipped (${why.slice(0, 160)}), so it proves nothing` };
 }
@@ -98,7 +108,24 @@ export function gateOutcome(ctx: GateContext, c: Criterion): StepOutcome {
     }
   }
 
-  if (!names.length && !chk.scopePaths?.length && !chk.keepsHistory) problems.push(`${c.id}: the gate check names no step, no path and no history rule, so it proves nothing`);
+  if (chk.fileContains) {
+    const { path: rel, text } = chk.fileContains;
+    const abs = path.resolve(ctx.root, rel);
+    if (!abs.startsWith(path.resolve(ctx.root) + path.sep)) problems.push(`${c.id}: ${rel} is outside the repository`);
+    else {
+      const now = readTextOr(abs, null);
+      if (now === null) problems.push(`${c.id}: ${rel} does not exist`);
+      else if (!now.replace(/\r\n/g, '\n').includes(text)) problems.push(`${c.id}: ${rel} does not contain "${text.slice(0, 80)}"`);
+      else {
+        const before = ctx.base === EMPTY_TREE ? null : rawGit(ctx.root, ['show', `${ctx.base}:${rel.replace(/\\/g, '/')}`], 20_000);
+        const had = before && before.code === 0 && before.stdout.replace(/\r\n/g, '\n').includes(text);
+        ok.push(`${rel} contains "${text.slice(0, 80)}"`);
+        if (had) notes.push(`${c.id}: ${rel} already contained that text at the base commit ${ctx.base.slice(0, 10)}`);
+      }
+    }
+  }
+
+  if (!names.length && !chk.scopePaths?.length && !chk.keepsHistory && !chk.fileContains) problems.push(`${c.id}: the gate check names no step, no path and no history rule, so it proves nothing`);
   if (problems.length) return fail(capReasons(problems, 20));
   return pass(`proved by the gate: ${ok.join('; ')}`, ...notes);
 }

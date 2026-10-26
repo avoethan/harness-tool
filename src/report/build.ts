@@ -11,6 +11,7 @@
  *   criteria                brief criteria
  *   checksRun               gate steps that ran (not skipped), per repo, over every gate run in the period
  *   checksFailedThenFixed   of those, steps that failed in some run and pass in the latest evidence
+ *   checksPreExisting       steps whose latest result is `pre-existing` (failing the same way at the base commit)
  *   gateVerdict             the latest evidence per repo, combined (FAIL > BLOCKED > PASS)
  *   verificationEvidence    E2E artefact files in the task's run folders
  *   standardsFlagged        ledger rule ids the standards step named (block or warn)
@@ -191,6 +192,7 @@ export function taskRow(acc: TaskAcc, st: HarnessState, sessionTask: Map<string,
     const now = latest.get(k);
     if (now === 'pass' || now === 'cached') fixed++;
   }
+  const preExisting = [...latest.values()].filter((s) => s === 'pre-existing').length;
   // Corrections: those the hook tied to this task, plus untied ones from sessions mapped to it.
   const taskHash = sha256(acc.id);
   const byClass: Record<string, number> = {};
@@ -212,6 +214,7 @@ export function taskRow(acc: TaskAcc, st: HarnessState, sessionTask: Map<string,
     criteria: acc.brief?.criteria?.length ?? 0,
     checksRun: ran.size,
     checksFailedThenFixed: fixed,
+    ...(preExisting ? { checksPreExisting: preExisting } : {}),
     gateVerdict: verdict,
     verificationEvidence: acc.runs.reduce((n, r) => n + r.e2eFiles, 0),
     standardsFlagged: rules.size,

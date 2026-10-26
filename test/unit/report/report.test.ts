@@ -113,11 +113,11 @@ test('Markdown: plain language, one table per section, no ticket text', () => {
     const tables = block.split('\n').filter((l) => /^\| --- \|/.test(l)).length;
     assert.equal(tables, 1, `one table in section ${block.split('\n')[0]}`);
   }
-  assert.match(md, /\| Ticket \| Criteria \| Checks run \| Failed then fixed \| Gate verdict \| Gate runs \| Verification evidence \| Standards flagged \| Clarifications asked \| Repeat corrections \| Steering messages \| Rework rounds \| Outcome \|/);
-  assert.match(md, new RegExp(`\\| ${H1.slice(0, 12)} \\| 3 \\| 6 \\| 1 \\| PASS \\| 2 \\| 2 \\| 0 \\| 2 \\| 1 \\| 3 \\| 2 \\| merged \\|`));
-  assert.match(md, new RegExp(`\\| ${H2.slice(0, 12)} \\| 2 \\| 3 \\| 0 \\| FAIL \\| 1 \\| 0 \\| 2 \\| 0 \\| 0 \\| 1 \\| not logged \\| stopped at the attempt cap \\|`));
+  assert.match(md, /\| Ticket \| Criteria \| Checks run \| Failed then fixed \| Already failing at base \| Gate verdict \| Gate runs \| Verification evidence \| Standards flagged \| Clarifications asked \| Repeat corrections \| Steering messages \| Rework rounds \| Outcome \|/);
+  assert.match(md, new RegExp(`\\| ${H1.slice(0, 12)} \\| 3 \\| 6 \\| 1 \\| 0 \\| PASS \\| 2 \\| 2 \\| 0 \\| 2 \\| 1 \\| 3 \\| 2 \\| merged \\|`));
+  assert.match(md, new RegExp(`\\| ${H2.slice(0, 12)} \\| 2 \\| 3 \\| 0 \\| 0 \\| FAIL \\| 1 \\| 0 \\| 2 \\| 0 \\| 0 \\| 1 \\| not logged \\| stopped at the attempt cap \\|`));
   assert.match(md, /\| declared \| 1 \|\n\| counted-strong \| 1 \|/);
-  assert.match(md, /\| Ticket \| Criteria .*\n\| --- \| ---: \| ---: \| ---: \| --- \| ---: \| ---: \| ---: \| ---: \| ---: \| ---: \| --- \| --- \|/, 'numbers right, text left');
+  assert.match(md, /\| Ticket \| Criteria .*\n\| --- \| ---: \| ---: \| ---: \| ---: \| --- \| ---: \| ---: \| ---: \| ---: \| ---: \| ---: \| --- \| --- \|/, 'numbers right, text left');
   assert.match(md, /\| total \| 5 \|/);
   assert.match(md, /Covers 2026-09-01 to 2026-10-05/);
   assert.doesNotMatch(md, /quokkaledger|Zanzibar|alpha-service/i);

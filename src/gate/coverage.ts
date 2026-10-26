@@ -11,6 +11,10 @@
  * files, lines that carry a statement) must not be below the overall line
  * coverage of the base commit. The base figure is measured once per base
  * commit in a temporary checkout and cached under ~/.harness/cache/<repoId>/.
+ *
+ * When the coverage script itself fails, the failure is compared with the
+ * same script at the base commit (src/gate/baseline.ts); a changed-line
+ * figure below the base is already a comparison with the base and is not.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -21,6 +25,7 @@ import { harnessHome } from '../lib/paths';
 import { withBaseCheckout } from './checkout';
 import { failureLines, runScript, scriptCommand } from './scripts';
 import { capReasons, fail, pass, skip, type StepDef, type StepOutcome } from './steps';
+import { rootsFor, scriptIdentity } from './baseline';
 
 export const COVERAGE_SCRIPTS = ['coverage', 'test:coverage', 'test:cov', 'cov'];
 export const COVERAGE_FILE = path.join('coverage', 'coverage-final.json');
@@ -116,7 +121,11 @@ export function runCoverage(ctx: GateContext): StepOutcome {
     /* none */
   }
   const r = runScript(s.cmd, [], ctx.timeout('coverage'));
-  if (r.code !== 0) return fail([`\`${s.cmd.display}\` exited ${r.timedOut ? 'on timeout' : r.code}`, ...failureLines(r, 8)]);
+  if (r.code !== 0) {
+    const header = `\`${s.cmd.display}\` exited ${r.timedOut ? 'on timeout' : r.code}`;
+    const identity = scriptIdentity(r, `coverage:${s.cmd.display}`, header, rootsFor(ctx));
+    return { status: 'fail', reasons: [header, ...failureLines(r, 8)], ...(identity ? { identity } : {}) };
+  }
   const now = readReport(s.cmd.cwd);
   if (!now) return skip(`\`${s.cmd.display}\` wrote no ${COVERAGE_FILE.split(path.sep).join('/')} (turn on the json reporter so the gate can compare changed lines)`);
   const cp = baseCachePath(ctx.repoId, ctx.base);
@@ -145,4 +154,18 @@ export function runCoverage(ctx: GateContext): StepOutcome {
   return pass(summary);
 }
 
-export const coverageStep: StepDef = { name: 'coverage', design: 6, group: 'coverage', cacheFail: false, after: ['build'], inputs: (ctx) => [ctx.tree], run: runCoverage };
+/** The coverage script alone, in a checkout of the base commit: whether it fails there the same way. */
+export function coverageScriptAtBase(ctx: GateContext, wt: string): StepOutcome {
+  const name = coverageScriptName(ctx);
+  if (!name) return skip('no coverage script at the base commit');
+  const s = scriptCommand(ctx, name);
+  if (!s.ok) return s.missing ? skip(s.reason) : fail([s.reason]);
+  const pkgRel = path.relative(ctx.root, s.cmd.cwd);
+  const r = runScript(s.cmd, [], ctx.timeout('coverage'), { cwd: path.join(wt, pkgRel) });
+  if (r.code === 0) return pass(`ran \`${s.cmd.display}\` at the base commit`);
+  const header = `\`${s.cmd.display}\` exited ${r.timedOut ? 'on timeout' : r.code}`;
+  const identity = scriptIdentity(r, `coverage:${s.cmd.display}`, header, rootsFor(ctx, wt));
+  return { status: 'fail', reasons: [header, ...failureLines(r, 8)], ...(identity ? { identity } : {}) };
+}
+
+export const coverageStep: StepDef = { name: 'coverage', design: 6, group: 'coverage', cacheFail: false, after: ['build'], inputs: (ctx) => [ctx.tree], run: runCoverage, baseline: coverageScriptAtBase };

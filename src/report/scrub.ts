@@ -115,6 +115,7 @@ export function vocabularySample(): Report {
       criteria: 1,
       checksRun: 1,
       checksFailedThenFixed: 1,
+      checksPreExisting: 1,
       gateVerdict: (['PASS', 'FAIL', 'BLOCKED', 'none'] as const)[i % 4],
       verificationEvidence: 1,
       standardsFlagged: 1,

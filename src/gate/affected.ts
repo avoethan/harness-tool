@@ -9,12 +9,17 @@
  *   npm / yarn / pnpm workspaces            each affected package's own `test` and `lint`
  *                                           scripts, from its package.json at the base commit
  * Skipped with the reason when the repository is a single package.
+ *
+ * With `at` (a base checkout) the same runs happen there, so a failure can
+ * be compared with the base (src/gate/baseline.ts): the identity is each
+ * failing run's label and exit code plus its normalised failure lines.
  */
 import type { GateContext } from './context';
 import { matchGlob } from '../discover/glob';
 import { run } from '../lib/exec';
 import { declaresBin, failureLines, readPackageJson, resolveBin, runScript, scriptCommand } from './scripts';
-import { capReasons, fail, pass, skip, type StepDef, type StepOutcome } from './steps';
+import { capReasons, fail, pass, skip, type FailureIdentity, type StepDef, type StepOutcome } from './steps';
+import { inCheckout, outputIdentity, rootsFor } from './baseline';
 
 export interface WorkspacePackage {
   rel: string;
@@ -75,25 +80,27 @@ export function affectedPackages(pkgs: WorkspacePackage[], changed: string[]): {
   return { direct: [...direct.values()], all: [...all.values()] };
 }
 
-function runTool(ctx: GateContext, bin: string[], args: string[], label: string): StepOutcome {
-  const r = run(bin[0], [...bin.slice(1), ...args], { cwd: ctx.root, timeoutMs: ctx.timeout('affected'), env: { ...process.env, CI: process.env.CI ?? '1', FORCE_COLOR: '0', NO_COLOR: '1' }, maxBuffer: 64 * 1024 * 1024 });
+function runTool(ctx: GateContext, bin: string[], args: string[], label: string, at?: string): StepOutcome {
+  const r = run(bin[0], [...bin.slice(1), ...args], { cwd: at ?? ctx.root, timeoutMs: ctx.timeout('affected'), env: { ...process.env, CI: process.env.CI ?? '1', FORCE_COLOR: '0', NO_COLOR: '1' }, maxBuffer: 64 * 1024 * 1024 });
   if (r.code === 0) return pass(`${label}: passed (${r.durationMs} ms)`);
-  return fail([`${label} exited ${r.timedOut ? 'on timeout' : r.code}`, ...failureLines(r, 12)]);
+  const header = `${label} exited ${r.timedOut ? 'on timeout' : r.code}`;
+  const identity = outputIdentity(r, `affected:${label}`, header, rootsFor(ctx, at));
+  return { status: 'fail', reasons: [header, ...failureLines(r, 12)], ...(identity ? { identity } : {}) };
 }
 
-export function runAffected(ctx: GateContext): StepOutcome {
+export function runAffected(ctx: GateContext, at?: string): StepOutcome {
   const changed = ctx.diff.flatMap((d) => (d.oldPath ? [d.oldPath, d.path] : [d.path]));
   if (ctx.baseEntries.has('nx.json')) {
     const nx = resolveBin(ctx.root, ctx.root, 'nx');
     if (!nx) return declaresBin(ctx.basePkg, 'nx') ? fail(["nx is declared in package.json but not installed; run the repository's install, then the gate again"]) : skip('nx.json is present but nx is neither declared nor installed; the affected projects were not run');
     if (!changed.length) return pass('no changed files, so no affected projects');
-    return runTool(ctx, nx, ['affected', '-t', 'test', 'lint', `--files=${changed.join(',')}`], 'nx affected -t test lint');
+    return runTool(ctx, nx, ['affected', '-t', 'test', 'lint', `--files=${changed.join(',')}`], 'nx affected -t test lint', at);
   }
   if (ctx.baseEntries.has('turbo.json')) {
     const turbo = resolveBin(ctx.root, ctx.root, 'turbo');
     if (!turbo) return declaresBin(ctx.basePkg, 'turbo') ? fail(["turbo is declared in package.json but not installed; run the repository's install, then the gate again"]) : skip('turbo.json is present but turbo is neither declared nor installed; the affected packages were not run');
     if (!changed.length) return pass('no changed files, so no affected packages');
-    return runTool(ctx, turbo, ['run', 'test', 'lint', `--filter=...[${ctx.base}]`], 'turbo run test lint (affected since the base)');
+    return runTool(ctx, turbo, ['run', 'test', 'lint', `--filter=...[${ctx.base}]`], 'turbo run test lint (affected since the base)', at);
   }
   const pkgs = workspacePackages(ctx);
   if (!pkgs.length) return skip('single-package repository (no nx, turbo or workspaces); the earlier steps covered it');
@@ -102,24 +109,38 @@ export function runAffected(ctx: GateContext): StepOutcome {
   const names = all.map((k) => k.name).join(', ');
   const reasons: string[] = [];
   const ran: string[] = [];
+  const items: FailureIdentity['items'] = [];
+  const planned: string[] = [];
+  let comparable = true;
   for (const k of all) {
     for (const script of ['test', 'lint']) {
       if (typeof k.scripts[script] !== 'string') continue;
+      planned.push(`${k.rel || '.'}:${script}`);
       const s = scriptCommand(ctx, script, k.rel);
       if (!s.ok) {
         reasons.push(`${k.name}: ${s.reason}`);
+        comparable = false;
         continue;
       }
-      const r = runScript(s.cmd, [], ctx.timeout('affected'));
+      const r = runScript(s.cmd, [], ctx.timeout('affected'), at ? { cwd: inCheckout(ctx, s.cmd.cwd, at) } : {});
       ran.push(`${k.name} ${script}`);
-      if (r.code !== 0) reasons.push(`${k.name}: \`${s.cmd.display}\` exited ${r.timedOut ? 'on timeout' : r.code}`, ...failureLines(r, 6).map((l) => `  ${l}`));
+      if (r.code !== 0) {
+        const header = `${k.name}: \`${s.cmd.display}\` exited ${r.timedOut ? 'on timeout' : r.code}`;
+        reasons.push(header, ...failureLines(r, 6).map((l) => `  ${l}`));
+        const id = outputIdentity(r, '', header, rootsFor(ctx, at));
+        if (!id) comparable = false;
+        else items.push({ id: `${k.name} ${script}|exit ${r.code}`, text: header }, ...id.items.map((i) => ({ id: `${k.name} ${script}|${i.id}`, text: `  ${i.text}` })));
+      }
     }
   }
-  if (reasons.length) return fail(capReasons(reasons, 20));
+  if (reasons.length) {
+    const identity: FailureIdentity | null = comparable ? { kind: 'output', fingerprint: `affected:${planned.join(',')}`, exit: 1, header: `${reasons.filter((x) => !x.startsWith('  ')).length} affected package script(s) failed`, items } : null;
+    return { status: 'fail', reasons: capReasons(reasons, 20), ...(identity ? { identity } : {}) };
+  }
   const dependents = all.length - direct.length;
   if (!ran.length) return pass(`affected packages: ${names} (${direct.length} changed, ${dependents} dependent); none has its own test or lint script, so the repository-level runs covered them`);
   return pass(`affected packages: ${names} (${direct.length} changed, ${dependents} dependent); ran ${ran.join(', ')}`);
 }
 
-export const affectedStep: StepDef = { name: 'affected', design: 9, group: 'affected', cacheFail: false, after: ['build'], inputs: (ctx) => [ctx.tree], run: runAffected };
+export const affectedStep: StepDef = { name: 'affected', design: 9, group: 'affected', cacheFail: false, after: ['build'], inputs: (ctx) => [ctx.tree], run: (ctx) => runAffected(ctx), baseline: runAffected };
 

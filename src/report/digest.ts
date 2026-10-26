@@ -7,7 +7,7 @@
  *
  * Sources, all under HARNESS_HOME:
  *   briefs/<task>.json                      title, criteria kinds, check kinds, prove-red results
- *   runs/<repo>/<task>/evidence.json        gate steps, verdict, BLOCKED reasons
+ *   runs/<repo>/<task>/evidence.json        gate steps, verdict, BLOCKED reasons, local changes left out (count)
  *   runs/<repo>/<task>/e2e/*.json           live artefacts (fresh when the tree hash matches the latest evidence)
  *   runs/<repo>/<task>/phase.json           tests-phase entries and `expectChanges` (optional field)
  *   runs/<repo>/<task>/run.json             runner state (optional `sessions`, `turns`, `costUsd`)
@@ -32,13 +32,16 @@ export interface DigestRepo {
   repo: string;
   verdict: Verdict | 'none';
   attempt: number;
-  steps: { pass: number; fail: number; skip: number; cached: number };
+  /** `preExisting`: steps failing the same way at the base commit (present only when there are any). */
+  steps: { pass: number; fail: number; skip: number; cached: number; preExisting?: number };
   failedSteps: string[];
   blockedReasons: string[];
   capReached: boolean;
   writeup: boolean;
   /** Live artefacts of this run folder: matching the latest evidence tree, not matching it, or recording a failure. */
   artefacts: { fresh: number; stale: number; failed: number; byKind: Record<string, number> };
+  /** Local changes present when the ticket started that the latest gate run left out, and recorded ones changed during the ticket (counts; evidence.json). */
+  localChanges?: { leftOut: number; changedSince: number };
 }
 
 export interface Digest {
@@ -109,10 +112,11 @@ function artefactKind(file: string): string {
 
 function repoDigest(run: RunRecord, dir: string): DigestRepo {
   const ev = run.evidence;
-  const steps = { pass: 0, fail: 0, skip: 0, cached: 0 };
+  const steps: DigestRepo['steps'] = { pass: 0, fail: 0, skip: 0, cached: 0 };
   const failedSteps: string[] = [];
   for (const s of ev?.steps ?? []) {
-    if (s.status in steps) steps[s.status]++;
+    if (s.status === 'pre-existing') steps.preExisting = (steps.preExisting ?? 0) + 1;
+    else if (s.status in steps) steps[s.status]++;
     if (s.status === 'fail' && failedSteps.length < MAX_LIST) failedSteps.push(oneLine(s.name, 60));
   }
   const blockedReasons: string[] = [];
@@ -137,6 +141,7 @@ function repoDigest(run: RunRecord, dir: string): DigestRepo {
     capReached: !!run.capFile || ev?.cap_reached === true,
     writeup: run.writeup,
     artefacts: art,
+    ...(ev?.localChanges ? { localChanges: { leftOut: Number(ev.localChanges.leftOut) || 0, changedSince: Number(ev.localChanges.changedSince) || 0 } } : {}),
   };
 }
 
@@ -353,8 +358,9 @@ export function renderDigest(d: Digest): string {
   L.push(`${d.gate.runs} full gate run(s), ${d.gate.partialRuns} partial; highest attempt ${d.gate.attempts}. Verdicts in order: ${d.gate.verdicts.join(', ') || 'none'}. Final verdict: ${d.gate.final === 'none' ? 'no run' : d.gate.final}.`);
   if (!d.repos.length) L.push('', 'No run folder yet.');
   for (const r of d.repos) {
-    L.push('', `Repository ${r.repo}: ${r.verdict === 'none' ? 'no evidence' : r.verdict} at attempt ${r.attempt}. Steps: ${r.steps.pass} pass, ${r.steps.fail} fail, ${r.steps.skip} skipped, ${r.steps.cached} cached.${r.capReached ? ' The attempt cap was reached.' : ''}`);
+    L.push('', `Repository ${r.repo}: ${r.verdict === 'none' ? 'no evidence' : r.verdict} at attempt ${r.attempt}. Steps: ${r.steps.pass} pass, ${r.steps.fail} fail, ${r.steps.skip} skipped, ${r.steps.cached} cached${r.steps.preExisting ? `, ${r.steps.preExisting} already failing at the base commit (pre-existing)` : ''}.${r.capReached ? ' The attempt cap was reached.' : ''}`);
     if (r.failedSteps.length) L.push(`Failing steps: ${r.failedSteps.join(', ')}.`);
+    if (r.localChanges?.leftOut || r.localChanges?.changedSince) L.push(`Local changes present when the ticket started: ${r.localChanges.leftOut} left out of the gate${r.localChanges.changedSince ? `, ${r.localChanges.changedSince} changed during the ticket and checked` : ''}.`);
     if (r.blockedReasons.length) {
       L.push('BLOCKED reason:');
       for (const x of r.blockedReasons) L.push(`- ${x}`);

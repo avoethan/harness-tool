@@ -203,7 +203,16 @@ test('declared but not installed tools FAIL (deleting node_modules cannot turn c
   });
   put(r, 'src/a.ts', 'export const a = 2;\n');
   const ctx = buildContext({ repo: r });
-  const tc = runTypecheck(ctx);
+  // the build script runs tsc, so the build step checks the types (and fails below because tsc is missing)
+  const tcb = runTypecheck(ctx);
+  assert.equal(tcb.status, 'skip');
+  assert.match(tcb.reasons[0], /build step checks the types/);
+  const noBuild = gitRepo(path.join(h.workspace, `ni${++n}`), {
+    'package.json': JSON.stringify({ name: 'ni', devDependencies: { typescript: '^5.0.0' } }),
+    'tsconfig.json': '{ "compilerOptions": { "strict": true } }\n',
+    'src/a.ts': 'export const a = 1;\n',
+  });
+  const tc = runTypecheck(buildContext({ repo: noBuild }));
   assert.equal(tc.status, 'fail');
   assert.match(tc.reasons[0], /declared in package\.json but not installed/);
   const li = runLint(ctx);

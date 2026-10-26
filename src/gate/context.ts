@@ -25,6 +25,7 @@ import { readJsonOr } from '../lib/fsx';
 import { runsDir } from '../lib/paths';
 import { getCurrentTask, loadBrief, validId, type BriefFile } from '../intake/brief';
 import { readPhaseRecord, type PhaseRecord } from '../intake/phase';
+import { committedSince, indexOf, leftOutLine, partitionChanges, readStartSnapshot, recordStartSnapshot, treeStates, type StartSnapshot } from '../intake/localchanges';
 
 /** git's empty tree: the base of a repository with no commits yet. */
 export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -114,6 +115,10 @@ export function workingTree(root: string, timeoutMs = 120_000): string | null {
       const real = path.resolve(root, ip.stdout.trim());
       try {
         fs.copyFileSync(real, tmpIndex);
+        // Keep the index's own time: git rehashes an entry whose file is not older than the index
+        // ("racy git"); a copy stamped now would hide a same-size edit made in the same second.
+        const st = fs.statSync(real);
+        fs.utimesSync(tmpIndex, st.atime, st.mtime);
       } catch {
         /* no index yet (fresh repository): start empty */
       }
@@ -186,7 +191,8 @@ function unquoteGitPath(p: string): string {
 
 /** Added lines per file (new line numbers) between two trees, from a zero-context diff. */
 export function addedLinesBetween(root: string, base: string, tree: string, paths?: string[]): Map<string, AddedLine[]> {
-  const args = ['diff-tree', '-r', '-M', '-p', '-U0', '--no-color', '--no-ext-diff', base, tree];
+  // core.quotepath=false: a non-ASCII path keeps its own name in the `+++ b/<path>` line.
+  const args = ['-c', 'core.quotepath=false', 'diff-tree', '-r', '-M', '-p', '-U0', '--no-color', '--no-ext-diff', base, tree];
   if (paths?.length) args.push('--', ...paths);
   const r = git(root, args, 120_000);
   const out = new Map<string, AddedLine[]>();
@@ -284,6 +290,17 @@ export interface GateContext {
   addedLines(): Map<string, AddedLine[]>;
   /** Paths changed and still present (A, M, R, C, T). */
   changedPresent(): string[];
+  /**
+   * Local changes present when the ticket started (src/intake/localchanges.ts): `diff` and
+   * `addedLines` already leave out `leftOut`; `changedSince` are recorded paths changed during the ticket.
+   */
+  local: LocalChanges;
+}
+
+export interface LocalChanges {
+  snapshot: StartSnapshot | null;
+  leftOut: string[];
+  changedSince: string[];
 }
 
 export class GateError extends Error {
@@ -417,6 +434,36 @@ export function chooseTask(repoId: string, opts: { task?: string; hook?: HookNam
   return { taskId: 'adhoc', source: 'adhoc' };
 }
 
+/** Drop the left-out paths (a path the diff header spells differently stays in: scanned, never hidden). */
+function dropPaths<V>(m: Map<string, V>, drop: Set<string> | null): Map<string, V> {
+  if (!drop) return m;
+  for (const k of drop) m.delete(k);
+  return m;
+}
+
+/**
+ * The task's start snapshot (task mode with a brief only; hook runs check what is committed or staged).
+ * A task without one gets it now, guarded so that nothing changed after the task started is recorded.
+ */
+function startSnapshotFor(root: string, repoId: string, taskId: string, mode: GateMode, brief: BriefFile | null, tree: string): { snapshot: StartSnapshot | null } {
+  if (mode !== 'task' || !brief || !validId(repoId) || !validId(taskId)) return { snapshot: null };
+  const have = readStartSnapshot(repoId, taskId);
+  if (have) return { snapshot: have };
+  try {
+    return { snapshot: recordStartSnapshot(root, { repoId, taskId, by: 'gate', tree, taskStart: brief.createdAt }).snapshot };
+  } catch {
+    return { snapshot: null };
+  }
+}
+
+/** The gate's diff without the local changes present at the start (one decision: isTicketPath). */
+function partitionLocal(root: string, snap: StartSnapshot, diff: DiffEntry[], tree: string) {
+  const idx = indexOf(snap, committedSince(root, snap.base, headSha(root)));
+  if (!idx) return null;
+  const states = treeStates(root, tree);
+  return partitionChanges(diff, idx, (p) => states.get(p) ?? null);
+}
+
 export function buildContext(opts: GateOptions): GateContext {
   const start = path.resolve(opts.repo ?? process.cwd());
   if (!fs.existsSync(start)) throw new GateError(`no such folder: ${start}`, 2);
@@ -435,7 +482,10 @@ export function buildContext(opts: GateOptions): GateContext {
   if (!tree) throw new GateError('could not hash the working tree (git add/write-tree failed); check that git works in this repository', 1);
   const entries = listTree(root, tree);
   const baseEntries = base === EMPTY_TREE ? new Map<string, TreeEntry>() : listTree(root, base);
-  const diff = base === tree ? [] : diffTrees(root, base, tree);
+  const rawDiff = base === tree ? [] : diffTrees(root, base, tree);
+  const local = startSnapshotFor(root, repoId, taskId, mode, brief, tree);
+  const split = local.snapshot ? partitionLocal(root, local.snapshot, rawDiff, tree) : null;
+  const diff = split ? split.kept : rawDiff;
   const config = configAtBase(root, base);
   const blobCache = new Map<string, string | null>();
   const baseText = (rel: string) => {
@@ -455,6 +505,10 @@ export function buildContext(opts: GateOptions): GateContext {
   let added: Map<string, AddedLine[]> | null = null;
   const timeouts = { ...DEFAULT_TIMEOUTS, ...(config.gate?.timeoutsMs ?? {}) };
   const phase = mode === 'task' && validId(repoId) && validId(taskId) ? readPhaseRecord(repoId, taskId) : null;
+  const warnings: string[] = [];
+  if (split?.leftOut.length) warnings.push(leftOutLine(split.leftOut.length));
+  const kept = new Set(diff.flatMap((d) => [d.path, d.oldPath ?? d.path]));
+  const dropped = split?.leftOut.length ? new Set(split.leftOut.filter((p) => !kept.has(p))) : null;
   return {
     root,
     repoId,
@@ -477,7 +531,7 @@ export function buildContext(opts: GateOptions): GateContext {
     phase,
     basePkg: pkg,
     pm: packageManagerFor(pkg, baseEntries),
-    warnings: [],
+    warnings,
     sessionId: opts.sessionId,
     timeout: (step: string) => {
       const n = timeouts[step];
@@ -485,7 +539,8 @@ export function buildContext(opts: GateOptions): GateContext {
     },
     baseText,
     nowText,
-    addedLines: () => (added ??= base === tree ? new Map() : addedLinesBetween(root, base, tree)),
+    addedLines: () => (added ??= base === tree || !diff.length ? new Map() : dropPaths(addedLinesBetween(root, base, tree), dropped)),
     changedPresent: () => diff.filter((d) => d.status !== 'D').map((d) => d.path),
+    local: { snapshot: local.snapshot, leftOut: split?.leftOut ?? [], changedSince: split?.changedSince ?? [] },
   };
 }

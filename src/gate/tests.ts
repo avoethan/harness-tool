@@ -27,7 +27,8 @@ import { withBaseCheckout } from './checkout';
 import { redactText } from '../lib/redact';
 import { loadBrief, saveBrief } from '../intake/brief';
 import { failureLines, runScript, scriptCommand, type Runner, type ScriptCommand } from './scripts';
-import { capReasons, fail, pass, skip, type StepDef, type StepOutcome } from './steps';
+import { capReasons, fail, pass, skip, type FailureIdentity, type StepDef, type StepOutcome } from './steps';
+import { inCheckout, normaliseTestName, outputIdentity, rootsFor } from './baseline';
 import { gateCriteria } from './gatecheck';
 import { gateWhat } from '../intake/gatecheck';
 import type { ExecResult } from '../lib/exec';
@@ -221,7 +222,11 @@ function testFilesNaming(ctx: Pick<GateContext, 'entries' | 'nowText'>, id: stri
   return [...ctx.entries.keys()].filter((f) => isTestFile(f) && re.test(ctx.nowText(f) ?? ''));
 }
 
-export function runBaseTests(ctx: GateContext): StepOutcome {
+/**
+ * `tests:base`. With `at` (a base checkout) the same command, with the same
+ * file filters, runs there, so a failure can be compared with the base.
+ */
+export function runBaseTests(ctx: GateContext, at?: string): StepOutcome {
   if (!ctx.basePkg) return skip('no package.json at the base commit (no test script to run)');
   const s = scriptCommand(ctx, 'test');
   if (!s.ok) return s.missing ? skip(`${s.reason}; there are no base tests to run`) : fail([s.reason]);
@@ -239,13 +244,24 @@ export function runBaseTests(ctx: GateContext): StepOutcome {
       scope = `${present.length} test file(s) that exist at the base commit`;
     } else scope = `the whole suite (the runner cannot be limited to the base commit's ${present.length} test file(s); the ${added.length} new test file(s) ran too)`;
   }
-  const r = runTests(s.cmd, [...reporterArgs(s.cmd.runner), ...filters], ctx.timeout('tests'));
+  const r = runTests(s.cmd, [...reporterArgs(s.cmd.runner), ...filters], ctx.timeout('tests'), at ? { cwd: inCheckout(ctx, s.cmd.cwd, at) } : {});
   const counts = parseCounts(s.cmd.runner, r.stdout);
   if (r.code === 0 && (!counts.known || counts.failed === 0)) {
     return pass(`\`${s.cmd.display}\` on ${scope}${counts.known ? `: ${counts.passed} passed, ${counts.skipped} skipped` : ''}`);
   }
+  const named = counts.known && counts.failures.length > 0 && counts.failures.length >= counts.failed;
   const why = counts.known && counts.failures.length ? counts.failures.map((f) => `failing: ${redactText(f).slice(0, 200)}`) : failureLines(r);
-  return fail(capReasons([`\`${s.cmd.display}\` on ${scope} exited ${r.timedOut ? 'on timeout' : r.code}${counts.known ? ` (${counts.failed} failed, ${counts.passed} passed)` : ''}`, ...why], 20));
+  const header = `\`${s.cmd.display}\` on ${scope} exited ${r.timedOut ? 'on timeout' : r.code}`;
+  const fingerprint = `tests:base:${s.cmd.display}|${filters.join(' ')}`;
+  const roots = rootsFor(ctx, at);
+  // Failing test names identify the failure only when the runner listed every one of them.
+  const identity: FailureIdentity | null =
+    r.timedOut || r.code === null
+      ? null
+      : named
+        ? { kind: 'tests', fingerprint, exit: r.code, header, items: counts.failures.map((f) => ({ id: normaliseTestName(f, roots), text: `failing: ${redactText(f).slice(0, 200)}` })) }
+        : outputIdentity(r, fingerprint, header, roots);
+  return { status: 'fail', reasons: capReasons([`${header}${counts.known ? ` (${counts.failed} failed, ${counts.passed} passed)` : ''}`, ...why], 20), ...(identity ? { identity } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +363,7 @@ export function acceptanceSteps(ctx: GateContext): StepDef[] {
   }));
 }
 
-export const baseTestsStep: StepDef = { name: 'tests:base', design: 5, group: 'tests', cacheFail: false, after: ['build'], inputs: (ctx) => [ctx.tree], run: runBaseTests };
+export const baseTestsStep: StepDef = { name: 'tests:base', design: 5, group: 'tests', cacheFail: false, after: ['build'], inputs: (ctx) => [ctx.tree], run: (ctx) => runBaseTests(ctx), baseline: runBaseTests };
 
 // ---------------------------------------------------------------------------
 // prove-red

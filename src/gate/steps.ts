@@ -9,10 +9,30 @@
  */
 import type { GateContext } from './context';
 
+/**
+ * What a failure is, so the same step at the base commit can be compared
+ * with it (src/gate/baseline.ts). `diagnostics`: normalised type or lint
+ * diagnostics; `tests`: the exit code and the normalised failing test names;
+ * `output`: the exit code and the normalised failure lines of the output.
+ */
+export interface FailureIdentity {
+  kind: 'diagnostics' | 'tests' | 'output';
+  /** What ran (command, files, filters); the base run must have run the same. */
+  fingerprint: string;
+  /** The exit code (`tests` and `output`); null for `diagnostics`. */
+  exit: number | null;
+  /** The first line of the step's failure (the command and how it ended). */
+  header: string;
+  /** One per failure: `id` is what is compared, `text` what is shown. */
+  items: Array<{ id: string; text: string }>;
+}
+
 export interface StepOutcome {
-  status: 'pass' | 'fail' | 'skip';
+  status: 'pass' | 'fail' | 'skip' | 'pre-existing';
   /** Failures (fail), the skip reason (skip), or notes and warnings (pass). */
   reasons: string[];
+  /** Set on a failure the base commit can be compared with; never on a failure that ran nothing. */
+  identity?: FailureIdentity;
 }
 
 export interface StepDef {
@@ -30,6 +50,12 @@ export interface StepDef {
   /** Steps whose failure makes this one pointless; it is skipped with a reason. */
   after?: string[];
   run(ctx: GateContext): StepOutcome | Promise<StepOutcome>;
+  /**
+   * The same step run in a checkout of the base commit at `wt` (same
+   * commands, same files and filters). Used only when `run` failed with an
+   * identity; the outcome's identity must carry the same fingerprint.
+   */
+  baseline?(ctx: GateContext, wt: string): StepOutcome;
 }
 
 /** The order steps run in (cheapest first), by name prefix. */

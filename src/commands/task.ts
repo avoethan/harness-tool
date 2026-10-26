@@ -10,6 +10,7 @@
  *   harness task release <id>
  *   harness task import --from-json <file>
  *   harness task validate
+ *   harness task snapshot [--task <id>]                  user-run: re-record the start snapshot
  *
  * All take `--repo <path>` (default: the git root of the working directory).
  * In the team setting, the subcommands that write (add, claim, done, fail,
@@ -18,6 +19,12 @@
  * `claim` also writes a brief for the task (same pipeline as a pasted
  * ticket) and makes it the repo's current task, so `harness phase`,
  * `harness gate` and `harness writeup` work the same in both settings.
+ * `claim` records the task's start snapshot (src/intake/localchanges.ts): the
+ * local changes already in the repo, which the gate and the write-up leave out.
+ * `snapshot` re-records it as the tree is now, in either setting (it writes
+ * only under ~/.harness). It is an admin command: an agent re-snapshotting
+ * after its own edits would hide them from the gate, so the guard denies it to
+ * agents and only the user runs it, in a terminal.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -28,7 +35,8 @@ import { repoIdFor, resolveConfig } from '../lib/config';
 import { isGitRepo, nearestRepoRoot, rawGit } from '../lib/git';
 import { instrument } from '../lib/log';
 import { subPath } from '../lib/paths';
-import { buildBrief, saveBrief, setCurrentTask, ticketTextForTask } from '../intake/brief';
+import { buildBrief, getCurrentTask, loadBrief, saveBrief, setCurrentTask, ticketTextForTask, validId } from '../intake/brief';
+import { recordStartSnapshot } from '../intake/localchanges';
 import {
   addTask,
   claimTask,
@@ -49,7 +57,7 @@ export const meta: CommandMeta = {
   name: 'task',
   summary: 'Personal task ledger: next, claim, done, fail, list',
   usage:
-    'harness task add --title <t> [--priority n] [--acceptance <a>]... [--paths a,b] [--depends-on id] | list [--status s] | next [--stale-minutes n] | claim <id> [--by name] [--stale-minutes n] | done <id> --commit <sha> [--evidence path] | fail <id> --reason <r> | release <id> | import --from-json <file> | validate  [--repo path] [--json]',
+    'harness task add --title <t> [--priority n] [--acceptance <a>]... [--paths a,b] [--depends-on id] | list [--status s] | next [--stale-minutes n] | claim <id> [--by name] [--stale-minutes n] | done <id> --commit <sha> [--evidence path] | fail <id> --reason <r> | release <id> | import --from-json <file> | validate | snapshot [--task id] (user-run)  [--repo path] [--json]',
   examples: ['harness task add --title "Add CSV export" --priority 1 --acceptance "GET /export returns 200 with text/csv" --paths src/export', 'harness task next --json', 'harness task claim T-003 --by claude', 'harness task done T-003 --commit 1a2b3c4'],
 };
 
@@ -182,11 +190,18 @@ export async function main(argv: string[]): Promise<number> {
         const brief = buildBrief(ticketTextForTask(r.task), { config: resolved.config, defaultRepoPath: root, id: r.task.id, source: 'ledger' });
         saveBrief(brief);
         setCurrentTask(repoIdFor(root), r.task.id);
+        let local = 0;
+        try {
+          if (isGitRepo(root)) local = recordStartSnapshot(root, { repoId: repoIdFor(root), taskId: r.task.id, by: 'claim', taskStart: brief.createdAt }).snapshot.entries.length;
+        } catch {
+          /* the snapshot only narrows the change; without it everything counts, as before */
+        }
         log('task.claim', { task: id }, { reclaimed: r.reclaimed ? 1 : 0, criteria: brief.criteria.length });
         if (json) out(JSON.stringify({ ...publicFields(r.task), brief: brief.id, lint: brief.lint }, null, 2));
         else {
           out(`Claimed ${id}${r.reclaimed ? ' (the earlier claim was stale)' : ''}; it is now the current task for this repo.\n${summary(r.task)}`);
           if (brief.lint.length) out(`Brief notes: ${brief.lint.join('; ')}`);
+          if (local) out(`${local} local change(s) already in this repo are left out of the gate and the write-up while they stay unchanged.`);
           out('Next: harness phase tests (write the failing checks), then harness phase implement.');
         }
         return 0;
@@ -264,6 +279,27 @@ export async function main(argv: string[]): Promise<number> {
         else if (problems.length) out(`Task ledger: ${problems.length} problem(s)\n${problems.map((x) => `  - ${x}`).join('\n')}`);
         else out(`Task ledger ok: ${tasks.length} task(s), no problems.`);
         return problems.length ? 1 : 0;
+      }
+      case 'snapshot': {
+        if (!isGitRepo(root)) {
+          process.stderr.write(`${root} is not a git repository; the start snapshot lists git's local changes.\n`);
+          return 2;
+        }
+        const repoId = repoIdFor(root);
+        const taskId = flagStr(p, 'task') ?? p.positional[1] ?? getCurrentTask(repoId);
+        if (!taskId || !validId(taskId)) {
+          process.stderr.write('No task: pass --task <id> (or claim or intake a task first).\n');
+          return 2;
+        }
+        if (!loadBrief(taskId)) {
+          process.stderr.write(`No brief for task ${taskId}; run harness intake or harness task claim first.\n`);
+          return 1;
+        }
+        const r = recordStartSnapshot(root, { repoId, taskId, by: 'user', replace: true });
+        log('task.snapshot', { task: taskId }, { entries: r.snapshot.entries.length });
+        if (json) out(JSON.stringify({ task: taskId, file: r.file, base: r.snapshot.base, entries: r.snapshot.entries.map((e) => e.path) }, null, 2));
+        else out(`Recorded ${r.snapshot.entries.length} local change(s) in ${path.basename(root)} as present before task ${taskId}: the gate and the write-up leave them out while they stay unchanged.\nSaved: ${r.file}`);
+        return 0;
       }
       default:
         process.stderr.write(`usage: ${meta.usage}\n`);

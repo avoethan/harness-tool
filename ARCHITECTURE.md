@@ -135,6 +135,11 @@ committed harness files (`AGENTS.md`, `CLAUDE.md`, `.claude/`, `.codex/`,
   runs/<repoId>/<taskId>/landing.json  the landing record (landed, post_landing_red, auto_fixed, reverted, revert_correct, transitions; src/land/record.ts)
   runs/<repoId>/<taskId>/ci-<n>-<kind>.json  local CI evidence of one landing (initial, rerun, after-fix)
   runs/<repoId>/<taskId>/run.json  runner state of a task (worktree, branch, agent, status; src/runctl/run.ts)
+  runs/<repoId>/<taskId>/start-snapshot.json  the local changes already in the repo when the task started
+                              ({version:1, repoId, taskId, base, recordedAt, by, entries:[{path, state: <git object id>|'deleted'}], withheld};
+                              paths and hashes only, never content). Written by intake, `task claim`, the runner (empty, for its
+                              worktree), the first gate run of a task without one, and the user's `harness task snapshot`;
+                              src/intake/localchanges.ts decides from it which changed paths are the ticket's (gate diff, write-up)
   (task worktrees are NOT here: see ~/.harness-worktrees below; the agent works in them and ~/.harness/** is protected)
   briefs/<briefId>.json       Brief (intake output; a superset, see src/intake/brief.ts); team ids are
                               t-<10 hex of the ticket sha256>, ledger tasks keep their own id; never the raw ticket text in logs
@@ -162,7 +167,7 @@ committed harness files (`AGENTS.md`, `CLAUDE.md`, `.claude/`, `.codex/`,
   judgment/<id>/              bundle.json, prompt.md, result.json (the agent's answer, saved only by `harness judgment submit <id> --from <file>`:
                               the rail denies agent file tools here); judgment/imported.json lists results discover re-counts on every run;
                               learn's bundles are judgment/lj<date>-<hex>/ (imported by `harness learn --import-judgment`)
-  cache/<repoId>/             tsbuildinfo (the gate's incremental typecheck), coverage-base-<sha>.json, stop-tree.json
+  cache/<repoId>/             tsbuildinfo (the gate's incremental typecheck), coverage-base-<sha>.json, baseline-<sha>.json (steps' results at the base commit), stop-tree.json
   featuremap/<repoId>/        overlay.json (hand-written recipes keyed by route id / migration id; written by verify,
                               read by the gate's map-drift step)
   runs/<repoId>/feature-map.json  generated feature-map inventory (routes, statuses, tables, migrations, needs; verify)

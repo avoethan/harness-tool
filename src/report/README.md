@@ -48,6 +48,7 @@ characters):
 | criteria | criteria in the brief |
 | checksRun | gate steps that ran (not skipped), per repository, over every gate run in the period (`gate.step`/`gate.fail` events) and the latest evidence |
 | checksFailedThenFixed | of those, steps that failed in some run and pass (or are cached) in the latest evidence |
+| checksPreExisting | steps whose latest result is `pre-existing`: failing the same way at the base commit, so not caused by the task (present only when there are any; the Markdown column "Already failing at base" shows 0 otherwise) |
 | gateVerdict | the latest evidence per repository, combined: FAIL over BLOCKED over PASS; `none` without evidence |
 | gateRuns | `gate.verdict` events for the task |
 | verificationEvidence | E2E artefact files in the task's run folders |

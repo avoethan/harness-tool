@@ -702,6 +702,9 @@ function harnessAdminCheck(seg: Segment): GuardDecision | null {
   let what: string | null = null;
   if (HARNESS_ADMIN_SUBS.has(sub)) what = `harness ${sub}`;
   else if (HARNESS_ADMIN_SECOND[sub]?.has(second)) what = `harness ${sub} ${second}`;
+  // A flag's value can stand between the subcommand and its second word (`harness task --repo . snapshot`):
+  // the CLI still runs the admin word, so any later word counts.
+  else if (words.slice(2).some((w) => HARNESS_ADMIN_SECOND[sub]?.has(w.toLowerCase()))) what = `harness ${sub} ${words.slice(2).find((w) => HARNESS_ADMIN_SECOND[sub]?.has(w.toLowerCase()))!.toLowerCase()}`;
   else if (secondFlag) what = `harness ${sub} ${second} ${secondFlag}`;
   else if (flagged) what = `harness ${sub} ${flagged}`;
   if (!what) return null;

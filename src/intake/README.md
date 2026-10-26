@@ -29,6 +29,7 @@ stop before code; every other question proceeds on its recommended option.
 ~/.harness/runs/<repoId>/current-task       the task id the gate, phase and write-up use when --task is absent
 ~/.harness/runs/<repoId>/<taskId>/phase.json   {phase, since, testsEntries, history[], expectChanges?[{file, reason, at}]}
 ~/.harness/runs/<repoId>/<taskId>/writeup.md   the last write-up (written by every full `harness gate` run, and by `harness writeup`)
+~/.harness/runs/<repoId>/<taskId>/start-snapshot.json   the local changes already in the repo when the task started (below)
 <repo>/tasks/*.md                           personal ledger (front matter + body), committed with the repo
 <git common dir>/harness-locks/ledger.lock  short-lived lock while a ledger write happens
 ```
@@ -40,6 +41,53 @@ The instrumentation log gets the brief id, the ticket's sha256 and counts;
 check, criteria waiting on a question, and plan-lint problems. Names, ids and
 counts only.
 `repoId` is `repoIdFor(<repo path>)` from `src/lib/config`.
+
+### Local changes present at the start (`localchanges.ts`)
+
+People keep uncommitted notes, investigations and write-ups inside their
+repositories. They are not the ticket's change, so `harness intake` (every
+mapped git repository), `harness task claim`, and the first `harness gate` of
+a task that has none record a **start snapshot** in the task's run folder:
+
+```
+{version: 1, repoId, taskId, base: <HEAD then>, recordedAt, by: intake|claim|gate|runner|user,
+ entries: [{path, state}], withheld: <n>}
+```
+
+`entries` are the paths `git status --porcelain=v1 -z --untracked-files=all`
+lists (modified, added, deleted, renamed, untracked; ignored files never),
+repository-relative with forward slashes as git prints them (spaces and
+non-ASCII kept), each with its git object id at that moment (the
+`git hash-object` blob id, read from a `git write-tree` of the working tree
+through a temporary index) or `deleted`. No file content is stored. An
+existing snapshot is never overwritten by intake, claim or the gate, so
+running intake again later cannot move the line. The runner's own task
+worktree gets an empty one (the harness made it; nothing there is yours).
+
+`isTicketPath` / `partitionChanges` decide, for the gate's diff and the
+write-up alike: a path whose state now equals its entry is left out; a
+recorded path that changed since (or was committed since: it ships) is in,
+and the write-up's "What changed" marks it "changed during the ticket (you
+had local changes in it before)"; a path that was clean at the start is in.
+"Existing tests changed" and the file count read the same filtered list.
+
+The agent must not be able to hide its own work this way. A snapshot that an
+agent's command can trigger (intake, claim, the gate) does not record a path
+an agent session edited in the last 12 hours (the session edit log; a shell
+write logged as the whole folder withholds everything), nor a path whose file
+time is not older than the brief (`createdAt`, 2 s slack), nor, when taken
+more than a minute after the brief, a deleted path. Those count as `withheld`
+and stay part of the change. `harness intake show` prints the count per
+repository ("Local changes present at the start in orders-api: 12 ..."),
+never the names.
+
+`harness task snapshot [--task <id>] [--repo <path>] [--json]` re-records the
+snapshot as the tree is now, with nothing withheld: for when you deliberately
+edit your notes mid-ticket. It is an **admin** command (the guard denies it to
+Claude, Codex and Devin, and the rendered permission rules deny
+`harness task snapshot`): an agent re-snapshotting after its own edits would
+hide them from the gate, so only you run it, in a terminal. It writes only
+under `~/.harness`, so it works in both settings.
 
 ## Command reference
 
@@ -63,6 +111,7 @@ counts only.
 | `harness task fail <id> --reason "<text>"` / `harness task release <id>` | 0; 1 unknown task or wrong state |
 | `harness task import --from-json <file>` | 0; 2 not a JSON array |
 | `harness task validate [--json]` | 0 clean; 1 problems listed |
+| `harness task snapshot [--task <id>] [--repo <path>] [--json]` (user-run; denied to agents) | 0 recorded; 1 the task has no brief; 2 not a git repository or no task |
 | `harness gate` (full run) | also writes `writeup.md` through this module and prints `Write-up: <path>` as its last line (see `src/gate/README.md`) |
 | `harness writeup [--task <id>] [--repo <path>] [--out <file>] [--json]` | 0; 1 no task or brief; 4 `--out` inside a team repo (refused) |
 

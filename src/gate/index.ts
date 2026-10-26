@@ -6,6 +6,8 @@
  *
  * Verdict rules:
  *   - PASS when every step that ran passed (skips are listed with reasons);
+ *     a step whose every failure is also present at the base commit is
+ *     `pre-existing` (src/gate/baseline.ts) and does not fail the verdict;
  *   - FAIL with every failing step's reasons, or when the working tree
  *     changed while the gate ran, or when the Stop hook marked the task as
  *     released by the attempt cap (`cap_reached`): the gate still runs every
@@ -33,6 +35,7 @@ import { coverageStep } from './coverage';
 import { mapDriftStep } from './mapdrift';
 import { artefactRefs, e2eSteps } from './e2e';
 import { affectedStep } from './affected';
+import { applyBaseline, closeBaseline } from './baseline';
 import { buildEvidence, capMarker, readPrevious, writeEvidence } from './evidence';
 import { renderReport } from './report';
 import { attemptCap } from '../hooks/common';
@@ -116,39 +119,51 @@ export async function runGate(opts: GateRunOptions = {}): Promise<GateRun> {
   const steps: GateStep[] = [];
   ctx.stepResults = steps;
   const failedNames = new Set<string>();
-  for (const d of defs) {
-    const st = Date.now();
-    const blockers = (d.after ?? []).filter((a) => failedNames.has(a));
-    if (blockers.length) {
-      steps.push({ name: d.name, status: 'skip', durationMs: 0, reasons: [`not run: ${blockers.join(', ')} failed; fix that first`], cache: 'off' });
-      continue;
-    }
-    let inputs: string[] | null = null;
-    try {
-      inputs = d.inputs(ctx);
-    } catch {
-      inputs = null;
-    }
-    const key = inputs ? stepKey(d.name, ctx.base, ctx.configHash, inputs) : undefined;
-    if (key && !opts.noCache) {
-      const hit = lookup(cache, d.name, key, d.cacheFail);
-      if (hit) {
-        steps.push({ name: d.name, status: hit.status === 'pass' ? 'cached' : 'fail', durationMs: Date.now() - st, reasons: hit.reasons.length ? hit.reasons : undefined, cacheKey: key, cache: 'hit' });
-        if (hit.status === 'fail') failedNames.add(d.name);
+  try {
+    for (const d of defs) {
+      const st = Date.now();
+      const blockers = (d.after ?? []).filter((a) => failedNames.has(a));
+      if (blockers.length) {
+        steps.push({ name: d.name, status: 'skip', durationMs: 0, reasons: [`not run: ${blockers.join(', ')} failed; fix that first`], cache: 'off' });
         continue;
       }
+      let inputs: string[] | null = null;
+      try {
+        inputs = d.inputs(ctx);
+      } catch {
+        inputs = null;
+      }
+      const key = inputs ? stepKey(d.name, ctx.base, ctx.configHash, inputs) : undefined;
+      if (key && !opts.noCache) {
+        const hit = lookup(cache, d.name, key, d.cacheFail);
+        if (hit) {
+          steps.push({ name: d.name, status: hit.status === 'pass' ? 'cached' : 'fail', durationMs: Date.now() - st, reasons: hit.reasons.length ? hit.reasons : undefined, cacheKey: key, cache: 'hit' });
+          if (hit.status === 'fail') failedNames.add(d.name);
+          continue;
+        }
+      }
+      let out: StepOutcome;
+      try {
+        out = await d.run(ctx);
+      } catch (e) {
+        out = { status: 'fail', reasons: [`internal error in this step: ${oneLine((e as Error)?.message ?? e, 200)}`] };
+      }
+      // A failure of a step that runs repository commands is compared with the same step at the base commit.
+      if (out.status === 'fail' && out.identity && d.baseline) {
+        try {
+          out = applyBaseline(ctx, d, out);
+        } catch (e) {
+          out = { status: 'fail', reasons: [...out.reasons, `the base commit could not be checked for comparison (${oneLine((e as Error)?.message ?? e, 160)}), so every failure above counts as new`] };
+        }
+      }
+      const dur = Date.now() - st;
+      const reasons = out.reasons.map((r) => redactText(oneLine(r, 400)));
+      steps.push({ name: d.name, status: out.status, durationMs: dur, ...(reasons.length ? { reasons } : {}), ...(key ? { cacheKey: key } : {}), cache: key && !opts.noCache ? 'miss' : 'off' });
+      if (out.status === 'fail') failedNames.add(d.name);
+      if (key && !opts.noCache && (out.status === 'pass' || (out.status === 'fail' && d.cacheFail))) store(cache, d.name, { key, status: out.status, reasons, durationMs: dur, at: new Date().toISOString() });
     }
-    let out: StepOutcome;
-    try {
-      out = await d.run(ctx);
-    } catch (e) {
-      out = { status: 'fail', reasons: [`internal error in this step: ${oneLine((e as Error)?.message ?? e, 200)}`] };
-    }
-    const dur = Date.now() - st;
-    const reasons = out.reasons.map((r) => redactText(oneLine(r, 400)));
-    steps.push({ name: d.name, status: out.status, durationMs: dur, ...(reasons.length ? { reasons } : {}), ...(key ? { cacheKey: key } : {}), cache: key && !opts.noCache ? 'miss' : 'off' });
-    if (out.status === 'fail') failedNames.add(d.name);
-    if (key && !opts.noCache && (out.status === 'pass' || (out.status === 'fail' && d.cacheFail))) store(cache, d.name, { key, status: out.status, reasons, durationMs: dur, at: new Date().toISOString() });
+  } finally {
+    closeBaseline(ctx);
   }
   if (!opts.noCache) {
     try {
@@ -180,6 +195,7 @@ export async function runGate(opts: GateRunOptions = {}): Promise<GateRun> {
     phase: ctx.phase?.phase,
     cap,
   });
+  if (ctx.local.leftOut.length || ctx.local.changedSince.length) evidence.localChanges = { leftOut: ctx.local.leftOut.length, changedSince: ctx.local.changedSince.length };
   const evidencePath = partial ? null : writeEvidence(ctx.runDir, evidence);
   const durationMs = Date.now() - t0;
 
@@ -200,6 +216,7 @@ export async function runGate(opts: GateRunOptions = {}): Promise<GateRun> {
     counts: {
       steps: steps.length,
       failed: steps.filter((s) => s.status === 'fail').length,
+      preExisting: steps.filter((s) => s.status === 'pre-existing').length,
       skipped: steps.filter((s) => s.status === 'skip').length,
       cached: steps.filter((s) => s.cache === 'hit').length,
       attempt: evidence.attempt,

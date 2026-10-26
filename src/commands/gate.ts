@@ -109,7 +109,7 @@ export async function main(argv: string[]): Promise<number> {
     }
     const r = await runGate({ repo, task, base, hook, steps, blocked, sessionId, noCache: a.flags.cache === false });
     const wu = writeupAfterGate(r);
-    if (json) process.stdout.write(JSON.stringify({ verdict: r.partial ? null : r.evidence.verdict, exitCode: r.exitCode, evidencePath: r.evidencePath, writeupPath: wu?.path ?? null, partial: r.partial, durationMs: r.durationMs, evidence: r.evidence }, null, 2) + '\n');
+    if (json) process.stdout.write(JSON.stringify({ verdict: r.partial ? null : r.evidence.verdict, exitCode: r.exitCode, evidencePath: r.evidencePath, writeupPath: wu?.path ?? null, partial: r.partial, durationMs: r.durationMs, localChanges: { leftOut: r.ctx.local.leftOut, changedSince: r.ctx.local.changedSince, withheld: r.ctx.local.snapshot?.withheld ?? 0 }, evidence: r.evidence }, null, 2) + '\n');
     else {
       process.stdout.write(r.report.endsWith('\n') ? r.report : r.report + '\n');
       if (wu) process.stdout.write(wu.line + '\n');

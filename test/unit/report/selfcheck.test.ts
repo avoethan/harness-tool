@@ -236,3 +236,14 @@ test('the self-check documents match the step catalogue, and every harness comma
   assert.match(readme, new RegExp(`\\| ${CODEX_STEPS.length} \\|`));
   assert.ok(BLOCK_BEGIN.startsWith('<!--') && BLOCK_END.endsWith('-->'));
 });
+
+test('the PreToolUse block probe denies a harmless marker command, lets others through, and the log counts it', async () => {
+  const deny = await probeHook('PreToolUse', 'devin', JSON.stringify({ session_id: 's', tool_name: 'exec', tool_input: { command: 'echo harness-pre-block-probe', workdir: '/x' } }));
+  assert.equal(deny.code, 2);
+  assert.match(deny.stdout ?? '', /"permissionDecision":"deny"/);
+  assert.match(deny.stderr ?? '', /MARKER-PRE-BLOCK-PROBE/);
+  const other = await probeHook('PreToolUse', 'devin', JSON.stringify({ session_id: 's', tool_name: 'exec', tool_input: { command: 'echo hello' } }));
+  assert.equal(other.code, 0);
+  const s = summariseProbeLog(readProbeLog('devin'));
+  assert.ok(s.preBlocks >= 1);
+});
