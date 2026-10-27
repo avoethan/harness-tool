@@ -3,6 +3,10 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.8.0 (2026-10-27)
+
+- `harness changes` says why: under each file the harness changed, every change its install or self-update plan recorded (the reason and the line it came from, consecutive lines with the same reason as one range), a "better because" sentence for that kind of change (by check id, e.g. a stale command corrected, derivable text trimmed, an autonomy grant quarantined, the hooks and rails added), and where text taken out is kept (`~/archive/`, `~/quarantine/`). A plan file that is gone is said, not guessed. Agent-file changes say whether the harness made them; one it did not make has no recorded reason, only the diff. `--json` carries the reasons.
+
 ## 0.7.0 (2026-10-26)
 
 - `harness changes`: lists every file installs and self-updates added, changed or removed (from the plan records kept with the backups) and how each stands now (as the harness left it, edited since, deleted since, back to the original), and every agent file (instructions, skills, rules, workflows, agent settings, the `assess` inventory) added, changed or removed since the record, by anyone. `--diff` prints line diffs, `--path` filters, `--json` for tools. `harness changes record` sets the starting point (a copy of each text file up to 1 MB under `~/agentfiles/`); install takes the first record; the guard and the rendered permission rules deny `changes record` to Claude, Codex and Devin, since re-recording after an agent's own edits would hide them.

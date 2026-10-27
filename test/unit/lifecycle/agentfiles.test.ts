@@ -43,6 +43,7 @@ test('the agent-files record lists instructions, skills and workflows added, cha
   assert.match(agentFileDiff(ch.find((c) => c.change === 'removed')!), /-release steps/);
   const text = formatAgentFileChanges(loaded, ch, { diff: true });
   assert.match(text, /taken by you/);
+  assert.match(text, /by: not the harness \(you or an agent\)/);
   assert.match(text, /removed .*release\.md/);
 
   // recording again makes now the starting point

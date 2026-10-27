@@ -73,8 +73,9 @@ export async function main(argv: string[]): Promise<number> {
     return 0;
   }
   process.stdout.write('What the harness changed\n');
-  process.stdout.write(formatChanges(r, { diff }));
+  process.stdout.write(formatChanges(r, { diff, filtered: !!filter }));
   process.stdout.write('\n');
-  process.stdout.write(formatAgentFileChanges(rec, agentChanges, { diff }));
+  const harnessAsLeft = new Set(collectChanges().files.filter((f) => f.now === 'as-left').map((f) => path.resolve(f.path)));
+  process.stdout.write(formatAgentFileChanges(rec, agentChanges, { diff, harnessAsLeft }));
   return 0;
 }

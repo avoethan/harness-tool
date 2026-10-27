@@ -139,12 +139,14 @@ export function agentFileDiff(c: AgentFileChange): string {
   }
 }
 
-export function formatAgentFileChanges(rec: AgentFilesRecord | null, changes: AgentFileChange[], opts: { diff?: boolean } = {}): string {
+export function formatAgentFileChanges(rec: AgentFilesRecord | null, changes: AgentFileChange[], opts: { diff?: boolean; harnessAsLeft?: Set<string> } = {}): string {
   if (!rec) return 'Agent files: not recorded yet. Run `harness changes record` to record them as they are now; later runs of `harness changes` then list every instruction, skill, rule or workflow file added, changed or removed since, by anyone.\n';
   const lines = [`Agent files since the record of ${rec.recordedAt} (${rec.by === 'install' ? 'taken by install' : 'taken by you'}; ${rec.files.length} file${rec.files.length === 1 ? '' : 's'} then), by anyone:`];
   if (!changes.length) lines.push('  none added, changed or removed.');
   for (const c of changes) {
     lines.push(`  ${c.change.padEnd(8)} ${c.display}  (${c.kind})`);
+    const byHarness = opts.harnessAsLeft?.has(path.resolve(c.path));
+    lines.push(byHarness ? '    by: the harness (its reasons are listed above)' : '    by: not the harness (you or an agent); no reason is recorded, the diff shows what changed');
     if (opts.diff) {
       const d = agentFileDiff(c);
       if (d) lines.push(...d.trimEnd().split('\n').map((l) => `    ${l}`));

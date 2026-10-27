@@ -367,12 +367,19 @@ harness changes record              # make now the starting point (you run it; a
 - **What the harness changed.** Every file an install or `self-update`
   added, changed or removed, from the records kept with the backups, and how
   each stands now: as the harness left it, edited since, deleted since, or back
-  to your original. `--diff` shows your original against the file now. The
-  harness never deletes a file you wrote.
+  to your original. Under each file, **why**: every change the install made
+  to it, with the line it came from, a **better because** line saying what
+  that kind of change gains (a stale command corrected, a file map the agent
+  can read itself trimmed, an autonomy grant set aside), and where text that
+  was taken out is kept (`~\.harness\archive` or, for review,
+  `~\.harness\quarantine`). `--diff` shows your original against the file
+  now. The harness never deletes a file you wrote.
 - **Your agent files since the record.** Every instruction, skill, rule,
   workflow and agent settings file (`AGENTS.md`, `.devin/...` and the rest,
   the same files `harness assess` reads) added, changed or removed since the
-  record, whoever did it: you, an agent, or the harness. Install takes the
+  record, whoever did it: you, an agent, or the harness. Each one says
+  whether the harness made it; for a change it did not make there is no
+  recorded reason, only the diff. Install takes the
   first record. On an install from before 0.7.0, run `harness changes record`
   once. Run it again when the changes are as you want them. It keeps a copy
   of each text file up to 1 MB under `~\.harness\agentfiles`, outside every
