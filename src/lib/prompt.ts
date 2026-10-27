@@ -18,6 +18,27 @@ export function ask(question: string): Promise<string> {
   });
 }
 
+/** Ask without echoing what is typed (for a token). Resolves to the trimmed answer. */
+export function askHidden(question: string): Promise<string> {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    const out = rl as unknown as { _writeToOutput: (s: string) => void; output: NodeJS.WriteStream };
+    let asked = false;
+    out._writeToOutput = (str: string) => {
+      if (!asked) {
+        process.stdout.write(str);
+        return;
+      }
+      if (str.includes('\n') || str.includes('\r')) process.stdout.write('\n');
+    };
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+    asked = true;
+  });
+}
+
 export async function askYesNo(question: string, def = false): Promise<boolean> {
   const a = (await ask(`${question} ${def ? '[Y/n]' : '[y/N]'} `)).toLowerCase();
   if (!a) return def;

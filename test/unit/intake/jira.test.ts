@@ -188,3 +188,26 @@ test('config set validates jira.*', () => {
   assert.match(setConfigValue(c, 'jira.tokenEnv', 'abc123secret-value') ?? '', /NAME/);
   assert.match(setConfigValue(c, 'jira.emailEnv', 'me@example.com') ?? '', /NAME/);
 });
+
+test('the token kept by `harness jira token set` is used when the environment has none; Basic auth with its email; the environment wins when set', async () => {
+  const { saveJiraCredentials, clearJiraCredentials, jiraCredentialsPath } = await import('../../../src/intake/jira');
+  setJira({ baseUrl: 'https://jira.example.test' });
+  delete process.env.HARNESS_JIRA_TOKEN;
+  delete process.env.HARNESS_JIRA_EMAIL;
+  saveJiraCredentials({ token: 'stored-token-5678', email: 'me@example.test' });
+  assert.ok(jiraCredentialsPath().startsWith(h.harnessHome));
+  let seen: Array<{ url: string; auth: string; accept: string }> = [];
+  setHttpGet(mock({ status: 200, body: ISSUE() }, seen));
+  let r = await capture(() => intakeMain(['--jira', 'SHOP-201']));
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(seen[0].auth, `Basic ${Buffer.from('me@example.test:stored-token-5678').toString('base64')}`);
+  assert.ok(!r.stdout.includes('stored-token-5678') && !r.stderr.includes('stored-token-5678'));
+  // an environment token takes precedence, and the stored email does not pair with it
+  process.env.HARNESS_JIRA_TOKEN = TOKEN;
+  seen = [];
+  setHttpGet(mock({ status: 200, body: ISSUE() }, seen));
+  r = await capture(() => intakeMain(['--jira', 'SHOP-202']));
+  assert.equal(seen[0].auth, `Bearer ${TOKEN}`);
+  delete process.env.HARNESS_JIRA_TOKEN;
+  assert.equal(clearJiraCredentials(), true);
+});

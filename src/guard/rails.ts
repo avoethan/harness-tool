@@ -403,7 +403,7 @@ export const HTTP_MUTATING_FLAGS = new Set(['-d', '--data', '--data-raw', '--dat
 export const SECRET_EXAMPLE_RE = /(^|[\\/])\.env\.(example|sample|template|dist|schema|defaults?|test\.example)$/i;
 
 /** Auth and token files beyond src/lib/redact's list. */
-export const SECRET_EXTRA_RE = /(^|[\\/])(\.claude\.json|auth\.json|\.git-credentials|\.docker[\\/]config\.json|\.kube[\\/]config|token(s)?\.json|\.htpasswd|\.boto|\.s3cfg|\.pgpass|\.my\.cnf|\.aws[\\/]credentials|\.azure[\\/]accessTokens\.json|\.config[\\/]gh[\\/]hosts\.yml|\.config[\\/]devin[\\/]auth[^\\/]*|known_hosts\.old|.*\.ovpn|.*\.keystore|.*\.asc|.*\.gpg|.*\.ppk)$/i;
+export const SECRET_EXTRA_RE = /(^|[\\/])(\.harness[\\/]secrets[\\/].*|\.claude\.json|auth\.json|\.git-credentials|\.docker[\\/]config\.json|\.kube[\\/]config|token(s)?\.json|\.htpasswd|\.boto|\.s3cfg|\.pgpass|\.my\.cnf|\.aws[\\/]credentials|\.azure[\\/]accessTokens\.json|\.config[\\/]gh[\\/]hosts\.yml|\.config[\\/]devin[\\/]auth[^\\/]*|known_hosts\.old|.*\.ovpn|.*\.keystore|.*\.asc|.*\.gpg|.*\.ppk)$/i;
 
 /** Programs that may take a secret-file path without exposing its contents. */
 export const SECRET_SAFE_PROGS = new Set([
@@ -704,7 +704,7 @@ export const ENV_SECRET_NAMES = ['.env', '.env.local', '.env.*.local', '.env.dev
  * which hold no secrets and which the agent is told to read instead. The guard's own check (`isSecretPath`) keeps
  * the `.env` prefix test with the template exemption, so a spelling not listed here is still stopped by the hook.
  */
-export const SECRET_GLOBS = [...ENV_SECRET_NAMES, ...ENV_SECRET_NAMES.map((n) => `**/${n}`), '**/*.pem', '**/*.key', '**/*.p12', '**/*.pfx', '**/*.jks', '**/*.kdbx', '**/id_rsa', '**/id_dsa', '**/id_ecdsa', '**/id_ed25519', '**/.npmrc', '**/.pypirc', '**/.netrc', '**/credentials', '**/credentials.json', '**/secrets.json', '**/secrets.yml', '**/secrets.yaml', '**/secret.json', '**/.git-credentials', '**/auth.json'];
+export const SECRET_GLOBS = ['**/.harness/secrets/**', ...ENV_SECRET_NAMES, ...ENV_SECRET_NAMES.map((n) => `**/${n}`), '**/*.pem', '**/*.key', '**/*.p12', '**/*.pfx', '**/*.jks', '**/*.kdbx', '**/id_rsa', '**/id_dsa', '**/id_ecdsa', '**/id_ed25519', '**/.npmrc', '**/.pypirc', '**/.netrc', '**/credentials', '**/credentials.json', '**/secrets.json', '**/secrets.yml', '**/secrets.yaml', '**/secret.json', '**/.git-credentials', '**/auth.json'];
 
 // ---------------------------------------------------------------------------
 // Tool names
@@ -714,3 +714,44 @@ export const COMMAND_TOOL_RE = /^(bash|exec|shell|run_command|run_terminal_cmd|e
 export const WRITE_TOOL_RE = /^(edit|write|multiedit|notebookedit|apply_patch|create_file|write_file|write_to_file|replace|replace_file_content|multi_replace|str_replace_editor|str_replace_based_edit_tool|insert|delete_file|create|save|move_file|rename_file|edit_file|propose_code|codebase_edit|fast_apply|edit_notebook|notebook_edit)$/i;
 export const READ_TOOL_RE = /^(read|view|view_file|read_file|cat|grep|search_file|file_search|read_url_content|view_code_item|open_file|get_file_contents|read_many_files|notebook_read|notebookread)$/i;
 export const MCP_TOOL_RE = /^mcp__([^_].*?)__(.+)$/;
+
+// ---------------------------------------------------------------------------
+// Secret environment variables (the secrets rail, for commands)
+// ---------------------------------------------------------------------------
+
+/**
+ * The user's own credentials, which reach company systems (Jira, the shared
+ * database, GitHub, Devin): named in a command, they would land in the
+ * transcript or let an agent call those systems without the harness. Other
+ * secret-looking variables (a local test container's $SA_PASSWORD, $TOKEN in a
+ * curl line) stay allowed, as before.
+ */
+export const PROTECTED_ENV = new Set(['HARNESS_JIRA_TOKEN', 'SQLCMDPASSWORD', 'GITHUB_TOKEN', 'GH_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'DEVIN_CREDENTIALS_B64', 'ATLASSIAN_API_TOKEN', 'JIRA_API_TOKEN']);
+
+export function isProtectedEnvName(name: string): boolean {
+  const n = name.toUpperCase();
+  return PROTECTED_ENV.has(n) || (n.startsWith('HARNESS_') && /TOKEN|SECRET|PASSWORD/.test(n));
+}
+
+/** References to one variable, in the shells and languages agents use; group 1 is the name. */
+export const ENV_NAME_REFS: RegExp[] = [
+  /\$\{?env:([A-Za-z_][A-Za-z0-9_]*)\}?/gi, // PowerShell $env:NAME, ${env:NAME}
+  /(?:^|[^A-Za-z0-9_])env:\\?([A-Za-z_][A-Za-z0-9_]*)/gi, // Get-ChildItem env:NAME, Env:\NAME
+  /%([A-Za-z_][A-Za-z0-9_]*)%/g, // cmd %NAME%
+  /\$\{?([A-Za-z_][A-Za-z0-9_]*)/g, // POSIX $NAME, ${NAME}
+  /process\.env(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[\s*['"`]([A-Za-z_][A-Za-z0-9_]*)['"`]\s*\])/g,
+  /os\.environ(?:\.get)?\s*[[(]\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]/g,
+  /os\.getenv\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]/g,
+  /GetEnvironmentVariable\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]/gi,
+  /(?:^|[\s;&|(])printenv\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+];
+
+/** Commands that print the whole environment, secrets included. */
+export const ENV_DUMP_RES: RegExp[] = [
+  /(?:^|[;&|(]\s*|^\s*)(?:env|printenv)\s*(?:-0\s*)?(?:$|[;&|)>])/m, // bare env / printenv
+  /(?:^|[;&|(]\s*|^\s*)set\s*(?:$|[;&|)>])/m, // cmd / POSIX bare set
+  /(?:^|[;&|(]\s*|^\s*)(?:export|declare|typeset)\s+-[px]+\s*(?:$|[;&|)>])/m,
+  /(?:Get-ChildItem|gci|dir|ls|Get-Item|gi)\s+-?(?:Path\s+)?['"]?env:\\?\*?['"]?\s*(?:$|[;&|)>])/im,
+  /GetEnvironmentVariables\s*\(/i,
+  /(?:console\.(?:log|dir|error|info)|JSON\.stringify|util\.inspect|print|pprint)\s*\(\s*(?:dict\s*\(\s*)?(?:process\.env|os\.environ)\s*[),]/,
+];

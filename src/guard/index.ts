@@ -70,6 +70,9 @@ import {
   HARNESS_ADMIN_SECOND,
   HARNESS_ADMIN_SECOND_FLAGS,
   HARNESS_ADMIN_FLAGS,
+  ENV_DUMP_RES,
+  ENV_NAME_REFS,
+  isProtectedEnvName,
 } from './rails';
 
 export interface GuardInput {
@@ -513,6 +516,8 @@ function dialectsFor(command: string, ctx: Ctx): Dialect[] {
 export function evaluateCommandText(command: string, ctx: Ctx): GuardDecision {
   if (typeof command !== 'string') return ALLOW;
   if (command.length > 200_000) return deny('opaque', 'The command is too long for the guard to read; split it into smaller commands.');
+  const envHit = secretEnvCheck(command, ctx.env);
+  if (envHit) return envHit;
   for (const d of dialectsFor(command, ctx)) {
     const parsed = parseCommand(command, { dialect: d });
     if (parsed.hiddenUnicode) {
@@ -522,6 +527,35 @@ export function evaluateCommandText(command: string, ctx: Ctx): GuardDecision {
     if (r.decision === 'deny') return r;
   }
   return ALLOW;
+}
+
+/**
+ * A command that names a credential variable, or prints the whole environment,
+ * would put the secret in the transcript or hand it to another program (an
+ * agent with the Jira token could call Jira without the harness). Only the
+ * user's own credentials count (rails.ts PROTECTED_ENV). Read on the
+ * raw text, before any parsing, so quoting and nesting cannot hide it. A
+ * program that reads its own variable (sqlcmd and SQLCMDPASSWORD, the
+ * harness and its token) names nothing and is not affected.
+ */
+function secretEnvCheck(command: string, env: Record<string, string | undefined>): GuardDecision | null {
+  for (const re of ENV_NAME_REFS) {
+    re.lastIndex = 0;
+    for (let m = re.exec(command); m; m = re.exec(command)) {
+      const name = m[1] ?? m[2];
+      if (name && isProtectedEnvName(name)) {
+        return deny('secrets', `The command names the environment variable ${name}, which holds the user's credential; it never goes into a command or the transcript. Programs that need it read it themselves (the harness reads the Jira token, sqlcmd reads SQLCMDPASSWORD); if a step needs it, ask the user.`, name);
+      }
+    }
+  }
+  // a dump is only a leak when one of those credentials is actually set
+  const held = Object.keys(env).filter((k) => isProtectedEnvName(k) && (env[k] ?? '') !== '');
+  if (held.length) {
+    for (const re of ENV_DUMP_RES) {
+      if (re.test(command)) return deny('secrets', `The command would print the whole environment, which holds the user's credentials (${held.join(', ')}); ask for one variable by name instead, e.g. $env:PATH.`, 'environment dump');
+    }
+  }
+  return null;
 }
 
 /** Evaluate a parsed command; cwd is tracked across top-level segments. */

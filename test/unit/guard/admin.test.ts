@@ -188,3 +188,42 @@ test('harness changes record is the user\'s; reading the changes stays the agent
   assert.ok(p.devin.deny.includes('Exec(harness changes record)'));
   assert.equal(run('harness changes --diff --path AGENTS.md').decision, 'allow');
 });
+
+test('the user\'s credentials in the environment: naming one is denied for every agent, dumping the environment is denied while one is set; other variables stay allowed', () => {
+  const held = { SQLCMDPASSWORD: 'pw', PATH: '/bin' };
+  const named = [
+    'echo $env:HARNESS_JIRA_TOKEN',
+    'Write-Output ${env:HARNESS_JIRA_TOKEN}',
+    'echo %HARNESS_JIRA_TOKEN%',
+    'printenv HARNESS_JIRA_TOKEN',
+    'echo "$GITHUB_TOKEN"',
+    'gci env:SQLCMDPASSWORD',
+    'echo $env:SQLCMDPASSWORD',
+    'node -e "console.log(process.env.HARNESS_JIRA_TOKEN)"',
+    'python -c "import os; print(os.environ[\'GH_TOKEN\'])"',
+    '[Environment]::GetEnvironmentVariable("HARNESS_JIRA_TOKEN")',
+    'curl -H "Authorization: Bearer $env:HARNESS_JIRA_TOKEN" https://jira.example.test/rest/api/2/issue/A-1',
+    'cat ~/.harness/secrets/jira.json',
+  ];
+  const dumps = ['env', 'printenv', 'set', 'Get-ChildItem env:', 'ls env:', 'export -p', 'env | grep -i proxy', 'node -e "console.log(process.env)"', 'python -c "import os; print(os.environ)"'];
+  for (const agent of ['claude', 'codex', 'devin'] as const) {
+    const ev = (c: string, env: Record<string, string>) => evaluate({ ...base, agent, env, toolName: agent === 'devin' ? 'exec' : 'Bash', toolInput: { command: c } });
+    for (const c of named) {
+      const d = ev(c, {});
+      assert.equal(d.decision, 'deny', `${agent}: ${c}`);
+      assert.equal(d.rail, 'secrets', `${agent}: ${c}`);
+    }
+    for (const c of dumps) {
+      const d = ev(c, held);
+      assert.equal(d.decision, 'deny', `${agent} with a credential set: ${c}`);
+      assert.match(d.reason, /SQLCMDPASSWORD/);
+      assert.equal(ev(c, { PATH: '/bin' }).decision, 'allow', `${agent} with no credential set: ${c}`);
+    }
+  }
+  for (const c of ['echo $env:PATH', 'echo $HOME', 'echo %PATH%', 'Get-ChildItem env:PATH', 'env NODE_ENV=test npm test', 'set NODE_ENV=test', 'grep -rn "process.env" src', 'node -e "console.log(process.env.NODE_ENV)"', 'git log --format=%H%n%an -3', 'date +%Y%m%d', 'harness intake --jira SHOP-1', 'echo $PWD', 'curl -H "Authorization: Bearer $TOKEN" http://x']) {
+    assert.equal(run(c).decision, 'allow', c);
+  }
+  const { buildPermissions } = require('../../../src/guard/permissions') as typeof import('../../../src/guard/permissions');
+  const p = buildPermissions({ setting: 'team', protectedRoots: ['/tmp/hh'] });
+  assert.ok(p.devin.deny.some((r) => r.includes('.harness/secrets')), 'Devin read rule for the harness secrets folder');
+});

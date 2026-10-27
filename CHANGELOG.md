@@ -3,6 +3,12 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.9.0 (2026-10-27)
+
+- `harness jira token set` (`--email` for Jira Cloud, none for a Data Center personal access token, `--from-env` to move `HARNESS_JIRA_TOKEN`), `token status`, `token clear`: the token is asked for without echo and kept in `~/secrets/jira.json` under the harness home, which the guard treats as secret (no agent reads or writes it; Devin, Claude and Codex read rules for it), so it is no longer in the environment every agent command inherits. The environment variables still work and take precedence. `harness jira` stays admin-only.
+- Guard (secrets rail): a command that names one of the user's own credentials, `HARNESS_JIRA_TOKEN`, `SQLCMDPASSWORD`, `GITHUB_TOKEN`/`GH_TOKEN`, `DEVIN_CREDENTIALS_B64` and other `HARNESS_*` tokens (`$env:X`, `%X%`, `$X`, `process.env.X`, `os.environ`, `os.getenv`, `[Environment]::GetEnvironmentVariable`, `printenv X`, `env:X`), is denied for every agent: it would land in the transcript or let the agent call Jira, the database or GitHub without the harness. Printing the whole environment (`env`, `printenv`, `set`, `Get-ChildItem env:`, `export -p`, `console.log(process.env)`, `print(os.environ)`) is denied while one of them is set. Other secret-looking variables and programs that read their own (sqlcmd) are unaffected.
+- Team setup guide: the token setup above, the permissions the token needs, and an epic's stories one at a time through `jira.filter` (`parent = EPIC-1` on Cloud, `'Epic Link' = EPIC-1` on Data Center).
+
 ## 0.8.0 (2026-10-27)
 
 - `harness changes` says why: under each file the harness changed, every change its install or self-update plan recorded (the reason and the line it came from, consecutive lines with the same reason as one range), a "better because" sentence for that kind of change (by check id, e.g. a stale command corrected, derivable text trimmed, an autonomy grant quarantined, the hooks and rails added), and where text taken out is kept (`~/archive/`, `~/quarantine/`). A plan file that is gone is said, not guessed. Agent-file changes say whether the harness made them; one it did not make has no recorded reason, only the diff. `--json` carries the reasons.

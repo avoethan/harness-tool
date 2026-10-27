@@ -101,12 +101,49 @@ harness config set jira.baseUrl https://yourcompany.atlassian.net
 harness config set jira.acceptanceField customfield_10042   # only if criteria live in their own field
 ```
 
-Then set two environment variables on the work machine (user level, not in any
-repository): `HARNESS_JIRA_EMAIL` (your Atlassian account email; leave it unset
-for Jira Data Center) and `HARNESS_JIRA_TOKEN` (an Atlassian API token, created
-under your Atlassian account's security settings, or a personal access token on
-Data Center). The harness only reads the issue, never stores the token, and
-calls only the host you set. Try it: `harness intake --jira SHOP-102`.
+Then give the harness your token, in your own terminal (agents cannot run it):
+
+```powershell
+harness jira token set --email you@yourcompany.com   # Jira Cloud: your Atlassian account email
+harness jira token set                               # Jira Data Center: no email, a personal access token
+harness jira token status
+```
+
+It asks for the token without showing it as you type or paste. Create it under
+your Atlassian account's security settings (Cloud: "API tokens"), or under your
+Jira profile on Data Center ("Personal Access Tokens"). The harness keeps it in
+`~\.harness\secrets\jira.json`, which the guard treats as a secret: Devin,
+Claude and Codex can neither read nor change it, and it is not in the
+environment that every agent command inherits. The harness calls only the host
+you set, never follows a redirect, and never prints or logs the token. Try it:
+`harness intake --jira SHOP-102`.
+
+The token has the permissions of your Jira account. To read tickets and post the
+write-up as a comment you need browse and comment permission in the project; to
+create follow-up tickets, create permission.
+
+(Older setups used the environment variables `HARNESS_JIRA_TOKEN` and
+`HARNESS_JIRA_EMAIL`; they still work and take precedence. If you set them, move
+the token with `harness jira token set --from-env` and then delete both
+variables under "Edit environment variables for your account".)
+
+The guard also blocks any agent command that names `HARNESS_JIRA_TOKEN`,
+`SQLCMDPASSWORD`, a GitHub token or the Devin credentials. That covers
+`echo $env:...`, `%...%`, `process.env.`, `os.environ` and
+`[Environment]::GetEnvironmentVariable`. While one of those is set, it also
+blocks commands that print the whole environment (`env`, `set`,
+`Get-ChildItem env:`). Programs that read their own variable are not affected:
+sqlcmd still reads `SQLCMDPASSWORD`.
+
+Epics are Jira issues too: `harness intake --jira EPIC-1` reads the epic's own
+summary and description, which is usually too broad for one ticket. To work
+through an epic's stories one at a time, point the saved search at its children
+and use `--jira-next`:
+
+```powershell
+harness config set jira.filter "parent = EPIC-1 AND status = 'Ready for dev' ORDER BY rank"         # Jira Cloud
+harness config set jira.filter "'Epic Link' = EPIC-1 AND status = 'Ready for dev' ORDER BY rank"    # Jira Data Center
+```
 
 Optional, to take the next ticket from a saved search instead of naming it:
 
