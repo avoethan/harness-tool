@@ -7,6 +7,7 @@
  */
 import * as fs from 'node:fs';
 import * as https from 'node:https';
+import { CERT_HELP, isCertChainError, trustedCa } from '../lib/tlsca';
 import * as path from 'node:path';
 import { loadConfig, repoIdFor, resolveConfig } from '../lib/config';
 import { writeJson } from '../lib/fsx';
@@ -30,7 +31,7 @@ export type HttpSend = (method: 'GET' | 'POST', url: string, headers: Record<str
 export const defaultHttpSend: HttpSend = (method, url, headers, body, timeoutMs) =>
   new Promise((resolve, reject) => {
     const h = body === null ? headers : { ...headers, 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(body)) };
-    const req = https.request(url, { method, headers: h, timeout: timeoutMs }, (res) => {
+    const req = https.request(url, { method, headers: h, timeout: timeoutMs, ca: trustedCa() }, (res) => {
       let text = '';
       res.setEncoding('utf8');
       res.on('data', (c: string) => {
@@ -171,7 +172,7 @@ async function call(method: 'GET' | 'POST', url: string, token: string, body: st
   try {
     return { ok: true, res: await httpSend(method, url, headers, body, 30_000) };
   } catch (e) {
-    return { ok: false, message: `network error: ${oneLine((e as Error).message)}` };
+    return { ok: false, message: `network error: ${oneLine((e as Error).message)}${isCertChainError(e) ? `. ${CERT_HELP}` : ''}` };
   }
 }
 

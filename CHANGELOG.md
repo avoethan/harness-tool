@@ -3,6 +3,10 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.9.1 (2026-10-28)
+
+- The harness's own HTTPS calls (Jira read and write, `pr open`, `reviews fetch`) also trust the operating system's certificate store where Node can read it (Node 22.15+, 23.5+), next to Node's bundled list and `NODE_EXTRA_CA_CERTS`. A company network that re-signs HTTPS with its own root made `harness intake --jira` fail with "self-signed certificate in certificate chain"; that error now also says how to export the company root for `NODE_EXTRA_CA_CERTS` on an older Node. Certificate checks are never turned off.
+
 ## 0.9.0 (2026-10-27)
 
 - `harness jira token set` (`--email` for Jira Cloud, none for a Data Center personal access token, `--from-env` to move `HARNESS_JIRA_TOKEN`), `token status`, `token clear`: the token is asked for without echo and kept in `~/secrets/jira.json` under the harness home, which the guard treats as secret (no agent reads or writes it; Devin, Claude and Codex read rules for it), so it is no longer in the environment every agent command inherits. The environment variables still work and take precedence. `harness jira` stays admin-only.

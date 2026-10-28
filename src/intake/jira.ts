@@ -11,6 +11,7 @@
  * through `redactText`. A redirect is never followed; the token is only ever sent to the
  * configured host.
  */
+import { CERT_HELP, isCertChainError } from '../lib/tlsca';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { httpGetOnce } from '../commands/reviews';
@@ -130,7 +131,7 @@ export async function fetchJiraTicket(key: string, cfg: JiraConfig | undefined, 
   try {
     res = await httpGetOnce(url, headers, TIMEOUT_MS);
   } catch (e) {
-    return fail(1, `Could not reach Jira for ${key}: ${(e as Error).message}`);
+    return fail(1, `Could not reach Jira for ${key}: ${(e as Error).message}${isCertChainError(e) ? `\n${CERT_HELP}` : ''}`);
   }
   if (res.status >= 300 && res.status < 400) return fail(1, redirectMessage(res, url, base, key));
   if (res.status !== 200) return fail(1, `Jira answered ${res.status} for ${key}${statusHint(res.status)}.`);
@@ -169,7 +170,7 @@ export async function fetchNextJiraKey(cfg: JiraConfig | undefined, env: NodeJS.
   try {
     res = await httpGetOnce(url, headers, TIMEOUT_MS);
   } catch (e) {
-    return fail(1, `Could not reach Jira for the filter: ${(e as Error).message}`);
+    return fail(1, `Could not reach Jira for the filter: ${(e as Error).message}${isCertChainError(e) ? `\n${CERT_HELP}` : ''}`);
   }
   if (res.status >= 300 && res.status < 400) return fail(1, redirectMessage(res, url, base, 'the filter'));
   if (res.status !== 200) return fail(1, `Jira answered ${res.status} for the filter${res.status === 400 ? ' (Jira did not accept the JQL; check jira.filter)' : statusHint(res.status).replace('no such issue, or no access to it', 'no such filter, or no access to it')}.`);

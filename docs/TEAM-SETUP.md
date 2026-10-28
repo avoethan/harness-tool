@@ -118,6 +118,25 @@ environment that every agent command inherits. The harness calls only the host
 you set, never follows a redirect, and never prints or logs the token. Try it:
 `harness intake --jira SHOP-102`.
 
+If it answers `self-signed certificate in certificate chain` (or `unable to get
+local issuer certificate`), your company network re-signs HTTPS with its own
+root certificate. Windows trusts that certificate; Node trusts it only if it
+can read the Windows store, which needs Node 22.15 or later (`node --version`).
+The harness then trusts it on its own. On an older Node, export the company
+root and point Node at it:
+
+1. Run `certmgr.msc`. Under Trusted Root Certification Authorities > Certificates,
+   find your company's root: the one that issued the certificate your browser
+   shows for the Jira site (click the lock icon > certificate > Certification path,
+   top entry).
+2. Right-click it > All Tasks > Export, choose "Base-64 encoded X.509 (.CER)", and
+   save it as `%USERPROFILE%\company-root.cer`.
+3. `[Environment]::SetEnvironmentVariable('NODE_EXTRA_CA_CERTS', "$HOME\company-root.cer", 'User')`,
+   then open a new terminal.
+
+Never turn certificate checks off (`NODE_TLS_REJECT_UNAUTHORIZED=0`): that would
+also accept anyone pretending to be your Jira.
+
 The token has the permissions of your Jira account. To read tickets and post the
 write-up as a comment you need browse and comment permission in the project; to
 create follow-up tickets, create permission.

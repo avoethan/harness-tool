@@ -18,6 +18,7 @@
  */
 import * as fs from 'node:fs';
 import * as https from 'node:https';
+import { CERT_HELP, isCertChainError, trustedCa } from '../lib/tlsca';
 import * as path from 'node:path';
 import type { CommandMeta } from '../cli';
 import { flagBool, flagStr, parseArgv } from '../lib/argv';
@@ -53,7 +54,7 @@ const MAX_BODY = 20 * 1024 * 1024;
 
 export const defaultHttpGet: HttpGet = (url, headers, timeoutMs) =>
   new Promise((resolve, reject) => {
-    const req = https.request(url, { method: 'GET', headers, timeout: timeoutMs }, (res) => {
+    const req = https.request(url, { method: 'GET', headers, timeout: timeoutMs, ca: trustedCa() }, (res) => {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (c: string) => {
@@ -89,7 +90,7 @@ export type HttpPost = (url: string, headers: Record<string, string>, body: stri
 export const defaultHttpPost: HttpPost = (url, headers, body, timeoutMs) =>
   new Promise((resolve, reject) => {
     const h = { ...headers, 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(body)) };
-    const req = https.request(url, { method: 'POST', headers: h, timeout: timeoutMs }, (res) => {
+    const req = https.request(url, { method: 'POST', headers: h, timeout: timeoutMs, ca: trustedCa() }, (res) => {
       let text = '';
       res.setEncoding('utf8');
       res.on('data', (c: string) => {
@@ -188,7 +189,7 @@ export async function fetchReviewComments(repo: string, token: string, maxPages 
     try {
       res = await httpGet(url, headers, timeoutMs);
     } catch (e) {
-      return { ok: false, status: 0, message: `network error: ${redactText((e as Error).message)}` };
+      return { ok: false, status: 0, message: `network error: ${redactText((e as Error).message)}${isCertChainError(e) ? `. ${CERT_HELP}` : ''}` };
     }
     pages++;
     if (res.status !== 200) return { ok: false, status: res.status, message: `GitHub answered ${res.status}` };

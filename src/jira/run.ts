@@ -4,6 +4,7 @@
  * so only a person in a terminal reaches this. Only the configured Jira host is ever called; the token
  * comes from the environment and is never printed, stored or logged.
  */
+import { CERT_HELP, isCertChainError } from '../lib/tlsca';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { EvidenceFile, JiraConfig } from '../types';
@@ -151,7 +152,7 @@ async function jiraPost(setup: JiraSetup, apiPath: string, body: unknown, what: 
   try {
     res = await httpPostOnce(url, setup.headers, JSON.stringify(body), TIMEOUT_MS);
   } catch (e) {
-    return { ok: false, message: redactText(`network error for ${what}: ${oneLine((e as Error).message)}`) };
+    return { ok: false, message: redactText(`network error for ${what}: ${oneLine((e as Error).message)}${isCertChainError(e) ? `. ${CERT_HELP}` : ''}`) };
   }
   if (res.status >= 300 && res.status < 400) return { ok: false, message: redactText(redirectMessage(res, url, setup.base, what)) };
   if (res.status !== 200 && res.status !== 201 && res.status !== 204) return { ok: false, message: redactText(apiError(res.status, res.body)) };
