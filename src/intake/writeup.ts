@@ -16,6 +16,7 @@
  * construction), and artifact paths are shown relative to the run folder so
  * no local home path ends up in a PR.
  */
+import { repoIdFor } from '../lib/config';
 import * as path from 'node:path';
 import type { CheckSpec, EvidenceFile, GateStep, Setting } from '../types';
 import { readJsonOr } from '../lib/fsx';
@@ -187,6 +188,10 @@ export function renderWriteup(input: WriteupInput, work: RepoWork): string {
   for (const o of others) {
     const oc = criteriaFor(brief, o.repoId);
     if (oc.length) L.push(`- In the ${o.name} change: ${oc.join(', ')}`);
+  }
+  for (const a of brief.addedRepos ?? []) {
+    const name = repos.find((r) => r.repoId === repoIdFor(a.path))?.name ?? a.path.split(/[\\/]/).pop();
+    L.push(`- Added during the ticket: ${name}${a.criteria.length ? ` (for ${a.criteria.join(', ')})` : ' (a supporting change, no criterion of its own)'}: ${short(a.reason, 160)}`);
   }
   if (brief.dropped.length) L.push(`- Left out by your answers: ${brief.dropped.map((d) => `${d.id} (${short(d.text, 60)})`).join('; ')}`);
   const waiting = brief.criteria.filter((c) => !c.check && ids.includes(c.id));

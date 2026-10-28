@@ -171,6 +171,20 @@ the agent "it's in <repo>"). A repository you name wins over the guess and is
 kept when questions are answered; a criterion that names another repository
 by name still goes there.
 
+Tickets across several repositories:
+
+- **Known at the start**: name them all, `--repo <a> --repo <b>` (or tell the
+  agent "it touches <a> and <b>"). Each criterion is placed among those;
+  the brief makes one unit per repository, the gate runs in each, and there
+  is one write-up per repository with the order to land them.
+- **Found on the way**: the agent stops and asks when the work needs a
+  repository the brief does not list. If you agree, it runs
+  `harness intake add-repo <folder> --reason "<why>"` (with `--criteria AC2`
+  when a criterion needs a change there too). That repository joins the same
+  ticket with its own base commit, your local changes there are left out like
+  in the others, and the write-up's Scope says it was added and why. Edits in
+  an unlisted repository also stop the agent with that command in the message.
+
 Optional, to take the next ticket from a saved search instead of naming it:
 
 ```powershell

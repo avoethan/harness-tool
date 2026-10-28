@@ -77,8 +77,10 @@ text, run `harness intake --jira SHOP-102`; it reads the ticket itself.
 
 When the user says which repository the ticket is in, add
 `--repo <that repository's folder>` to the intake command; it wins over the
-harness's own guess. When the brief's `repo:` line names a repository the
-user did not expect, ask before going on, and run intake again with `--repo`.
+harness's own guess. When the ticket spans several, repeat it (`--repo <a>
+--repo <b>`); each criterion is placed among those. When the brief's `repo:`
+line names a repository the user did not expect, ask before going on, and run
+intake again with `--repo`.
 
 Expected output (shape):
 
@@ -372,7 +374,13 @@ to ask instead.
 4. **The problem cannot be reproduced**: the bug the ticket describes does
    not happen on the test setup, so no check can go red.
 5. **Scope grows beyond the ticket's units**: the change needs repos, files
-   or behaviour the brief does not cover.
+   or behaviour the brief does not cover. When it is another repository, say
+   which one and why, and ask. If the user agrees, run
+   `harness intake add-repo <its folder> --reason "<why>"` (add
+   `--criteria AC2` when a criterion needs a change there too), then carry on:
+   that repository gets its own base, gate and write-up, and the write-up says
+   it was added and why. Do not edit a repository the brief does not list
+   before that.
 {{#personal}}
 
 `harness run check-stop` reports these conditions when the runner drives you.

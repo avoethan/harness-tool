@@ -3,6 +3,10 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.10.0 (2026-10-28)
+
+- Tickets across repositories. `--repo` repeats (`--repo <a> --repo <b>`): each criterion is placed among the named repositories by the usual rules and never outside them (`pinnedRepos` in the brief). `harness intake add-repo <folder> --reason "<why>" [--criteria AC2,...] [--task <id>]` adds a repository found during the work to the same ticket: its HEAD becomes its base, its local changes are recorded as not the ticket's, it becomes the current task there, the named criteria get units there too, and a repository with no criteria is a supporting change whose gate runs the base steps but no acceptance checks. The write-up's Scope says "Added during the ticket: <repo> ... : <reason>". The Stop hook, on edits in a repository that has no ticket while another edited repository has one, names the ticket and the exact `add-repo` command. The task skill asks the user before adding a repository and does not edit one the brief does not list before that.
+
 ## 0.9.2 (2026-10-28)
 
 - Intake: `--repo` given explicitly now wins over the harness's guess of the repository (a path, a resource name that matches another repository, the ticket as a whole); only a criterion that names another repository by name still goes there. The choice is kept in the brief (`pinnedRepo`), so answering a question or taking the same ticket again keeps it. The brief shows `(given)`. Before, `--repo` counted only when the ticket pointed nowhere, so a ticket mentioning e.g. "inventory" went to an inventory repository whatever the user said. The task skill tells the agent to pass `--repo` when the user names the repository, and to ask when the brief names one the user did not expect.

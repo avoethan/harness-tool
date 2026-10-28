@@ -107,6 +107,19 @@ export interface BriefFile extends Brief {
   jiraKey?: string;
   /** The repository the user named with `--repo`; it keeps winning over the guesses when the brief is rebuilt. */
   pinnedRepo?: string;
+  /** All repositories named with `--repo` when there were several (the first is `pinnedRepo`). */
+  pinnedRepos?: string[];
+  /** Repositories added after intake (`harness intake add-repo`), when the work turned out to need them. */
+  addedRepos?: AddedRepo[];
+}
+
+export interface AddedRepo {
+  /** Absolute path of the repository. */
+  path: string;
+  /** Criteria that also need a change there; empty for a supporting change with no criterion of its own. */
+  criteria: string[];
+  reason: string;
+  at: string;
 }
 
 export interface IntakeContext {
@@ -119,6 +132,8 @@ export interface IntakeContext {
    * whole); only a criterion that names another repository by name goes there.
    */
   repoPinned?: boolean;
+  /** More repositories named with repeated `--repo`; the ticket's criteria are placed among these and `defaultRepoPath`. */
+  extraRepoPaths?: string[];
   now?: Date;
   /**
    * No one is there to answer (`harness intake --unattended`, `HARNESS_UNATTENDED=1`, the personal runner):
@@ -215,6 +230,8 @@ interface Seed {
   baseShas: Record<string, string>;
   jiraKey?: string;
   pinnedRepo?: string;
+  pinnedRepos?: string[];
+  addedRepos?: AddedRepo[];
 }
 
 /** Parse a pasted ticket and build the brief. */
@@ -240,7 +257,12 @@ export function buildBrief(text: string, ctx: IntakeContext): BriefFile {
     dropped: previous && previous.ticketHash === parsed.hash ? previous.dropped : [],
     baseShas: previous && previous.ticketHash === parsed.hash ? previous.baseShas : {},
     ...((ctx.jiraKey ?? (previous && previous.ticketHash === parsed.hash ? previous.jiraKey : undefined)) ? { jiraKey: (ctx.jiraKey ?? previous?.jiraKey) as string } : {}),
-    ...(ctx.repoPinned && ctx.defaultRepoPath ? { pinnedRepo: ctx.defaultRepoPath } : previous && previous.ticketHash === parsed.hash && previous.pinnedRepo ? { pinnedRepo: previous.pinnedRepo } : {}),
+    ...(ctx.repoPinned && ctx.defaultRepoPath
+      ? { pinnedRepo: ctx.defaultRepoPath, ...(ctx.extraRepoPaths?.length ? { pinnedRepos: [ctx.defaultRepoPath, ...ctx.extraRepoPaths] } : {}) }
+      : previous && previous.ticketHash === parsed.hash && previous.pinnedRepo
+        ? { pinnedRepo: previous.pinnedRepo, ...(previous.pinnedRepos?.length ? { pinnedRepos: previous.pinnedRepos } : {}) }
+        : {}),
+    ...(previous && previous.ticketHash === parsed.hash && previous.addedRepos?.length ? { addedRepos: previous.addedRepos } : {}),
   };
   return assemble(seed, ctx, now);
 }
@@ -268,6 +290,8 @@ function seedOf(b: BriefFile): Seed {
     baseShas: b.baseShas,
     ...(b.jiraKey ? { jiraKey: b.jiraKey } : {}),
     ...(b.pinnedRepo ? { pinnedRepo: b.pinnedRepo } : {}),
+    ...(b.pinnedRepos?.length ? { pinnedRepos: b.pinnedRepos } : {}),
+    ...(b.addedRepos?.length ? { addedRepos: b.addedRepos } : {}),
   };
 }
 
@@ -277,9 +301,15 @@ const FACT_TOPICS = new Set(['meaning', 'measure']);
 function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): BriefFile {
   const pinnedPath = ctx.repoPinned && ctx.defaultRepoPath ? ctx.defaultRepoPath : seed.pinnedRepo;
   const defaultPath = pinnedPath ?? ctx.defaultRepoPath;
-  const infos = repoInfos(ctx.config, defaultPath ? [defaultPath] : []);
+  const added = seed.addedRepos ?? [];
+  const infos = repoInfos(ctx.config, [...(defaultPath ? [defaultPath] : []), ...added.map((a) => a.path)]);
   const defaultRepo = defaultPath ? repoIdFor(defaultPath) : undefined;
   const pinned = !!pinnedPath;
+  // several named repositories: place each criterion among them, by the same rules as the guess
+  const pinnedSet = ctx.repoPinned && ctx.extraRepoPaths?.length && ctx.defaultRepoPath ? [ctx.defaultRepoPath, ...ctx.extraRepoPaths] : seed.pinnedRepos;
+  for (const p of pinnedSet ?? []) if (!infos.some((r) => r.id === repoIdFor(p))) infos.push(...repoInfos({ repos: [] }, [p]));
+  const pinnedIds = pinnedSet?.length ? new Set(pinnedSet.map((p) => repoIdFor(p))) : null;
+  const placeAmong = pinnedIds ? infos.filter((r) => pinnedIds.has(r.id)) : null;
   const byId = new Map(infos.map((r) => [r.id, r]));
   const allText = [seed.title, seed.description, ...seed.criteria.map((c) => c.text)].join('\n');
   const ticketRepos = infos.filter((r) => mentionsRepo(allText, r) !== null).map((r) => r.id);
@@ -304,8 +334,19 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
     const kr = classifyKind(classifyText, facts, ticketText);
     if (inherited) kr.reasons = [...kr.reasons, `endpoint ${inherited.routes[0].method} ${inherited.routes[0].path.split('?')[0]} from the ticket`];
     let kind: CriterionKind = kr.kind;
-    const guessed = mapCriterionRepos(c.text, facts, infos, ticketRepos, defaultRepo);
-    const match: RepoMatch = pinned && defaultRepo && guessed.how !== 'mention' ? { repos: [defaultRepo], how: 'given' } : guessed;
+    const guessed = placeAmong
+      ? mapCriterionRepos(c.text, facts, placeAmong, ticketRepos.filter((r) => pinnedIds!.has(r)), defaultRepo)
+      : mapCriterionRepos(c.text, facts, infos, ticketRepos, defaultRepo);
+    const first: RepoMatch = placeAmong
+      ? guessed.repos.length && guessed.how !== 'default'
+        ? { repos: guessed.repos, how: 'given' }
+        : { repos: [defaultRepo!], how: 'given' }
+      : pinned && defaultRepo && guessed.how !== 'mention'
+        ? { repos: [defaultRepo], how: 'given' }
+        : guessed;
+    // a repository added during the ticket for this criterion: the criterion needs a change there too
+    const also = added.filter((a) => a.criteria.includes(c.id)).map((a) => repoIdFor(a.path)).filter((id) => !first.repos.includes(id));
+    const match: RepoMatch = also.length ? { repos: [...first.repos, ...also], how: first.how } : first;
     const repo: RepoInfo | undefined = match.repos.length ? byId.get(match.repos[0]) : undefined;
     const system = repo?.name ?? (ticketRepos.length === 1 ? byId.get(ticketRepos[0])?.name : undefined) ?? 'system';
     const ears = kr.needsRewrite ? earsRewrite(classifyText, system, facts, kind) : undefined;
@@ -409,7 +450,7 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
     criteria.map((c) => ({ id: c.id, kind: c.kind, repos: byCriterion[c.id] ?? [], facts: meta[c.id].facts })),
     repoNames,
   );
-  const repos = [...new Set(plan.units.map((u) => u.repo).filter((r) => r !== UNMAPPED))];
+  const repos = [...new Set([...plan.units.map((u) => u.repo).filter((r) => r !== UNMAPPED), ...added.map((a) => repoIdFor(a.path))])];
   const baseShas = { ...seed.baseShas };
   for (const r of repos) {
     const info = byId.get(r);
@@ -454,6 +495,8 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
     lint,
     ...(seed.jiraKey ? { jiraKey: seed.jiraKey } : {}),
     ...(seed.pinnedRepo ? { pinnedRepo: seed.pinnedRepo } : {}),
+    ...(seed.pinnedRepos?.length ? { pinnedRepos: seed.pinnedRepos } : {}),
+    ...(seed.addedRepos?.length ? { addedRepos: seed.addedRepos } : {}),
   };
 }
 

@@ -46,3 +46,34 @@ test('with --repo, a criterion that names another repository by name still goes 
   assert.deepEqual(b.repoMap.byCriterion.AC1, [repoIdFor(inv)]);
   assert.deepEqual(b.repoMap.byCriterion.AC2, [repoIdFor(web)]);
 });
+
+test('several --repo: each criterion is placed among the named repositories, never outside them', () => {
+  const inv = repo('inventory-service');
+  const web = repo('web-dashboard');
+  const other = repo('billing-api');
+  const config = { repos: [inv, web, other].map((p) => ({ id: repoIdFor(p), name: path.basename(p), path: p })) } as never;
+  const t = 'Title: Low stock\nAcceptance Criteria:\n1. GET /inventory/low returns the items below threshold.\n2. The billing totals are unchanged.\n3. The dashboard lists them.\n';
+  const b = buildBrief(t, { config, defaultRepoPath: web, repoPinned: true, extraRepoPaths: [inv] });
+  assert.deepEqual(b.repoMap.byCriterion.AC1, [repoIdFor(inv)], 'the guess, inside the named set');
+  assert.deepEqual(b.repoMap.byCriterion.AC2, [repoIdFor(web)], 'billing-api was not named: the first named repository');
+  assert.deepEqual(b.repoMap.byCriterion.AC3, [repoIdFor(web)]);
+  assert.deepEqual(b.pinnedRepos, [web, inv]);
+  assert.deepEqual(reassemble(b, { config }).repoMap.byCriterion.AC1, [repoIdFor(inv)], 'kept on rebuild');
+});
+
+test('a repository added during the ticket: for named criteria it gets their units; without criteria it is a supporting change the gate checks with no acceptance step', async () => {
+  const { criteriaForRepo } = await import('../../../src/gate/context');
+  const inv = repo('inventory-service');
+  const web = repo('web-dashboard');
+  const shared = repo('shared-types');
+  const config = { repos: [] } as never;
+  const b = buildBrief(TICKET, { config, defaultRepoPath: web, repoPinned: true });
+  const withApi = reassemble({ ...b, addedRepos: [{ path: inv, criteria: ['AC1'], reason: 'the endpoint lives there', at: 'now' }] }, { config });
+  assert.deepEqual(withApi.repoMap.byCriterion.AC1, [repoIdFor(web), repoIdFor(inv)]);
+  assert.ok(withApi.units.some((u) => u.repo === repoIdFor(inv) && u.criteria.includes('AC1')));
+  assert.deepEqual(criteriaForRepo(withApi, repoIdFor(inv)).map((c) => c.id), ['AC1']);
+  const withShared = reassemble({ ...withApi, addedRepos: [...withApi.addedRepos!, { path: shared, criteria: [], reason: 'a type the endpoint returns', at: 'now' }] }, { config });
+  assert.ok(withShared.repos.includes(repoIdFor(shared)));
+  assert.deepEqual(criteriaForRepo(withShared, repoIdFor(shared)), [], 'no acceptance checks of the ticket run there');
+  assert.equal(criteriaForRepo(withShared, repoIdFor(web)).length, 2);
+});

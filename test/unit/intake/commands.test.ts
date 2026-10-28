@@ -239,3 +239,34 @@ test('a ticket with no criteria: the answer to "What must be true when this is d
   assert.deepEqual(title.brief.criteria.map((c) => c.text), ['Add a second line to the README']);
   assert.throws(() => answerQuestion(empty, q.n, 'A', ctx), /give the criteria themselves/);
 });
+
+test('harness intake add-repo: adds a git repository to the current brief with its reason, sets it current there, and refuses a missing reason, an unknown criterion or a non-repository', async () => {
+  const { main } = await import('../../../src/commands/intake');
+  const { capture: cap } = await import('../commands/capture');
+  const { gitRepo, tempHome: th } = await import('../lifecycle/helpers');
+  const { getCurrentTask, loadBrief } = await import('../../../src/intake/brief');
+  const { repoIdFor: rid } = await import('../../../src/lib/config');
+  const fsm = await import('node:fs');
+  const pathm = await import('node:path');
+  const home = th('harness-add-repo-');
+  try {
+    const web = gitRepo(pathm.join(home.workspace, 'web'));
+    const api = gitRepo(pathm.join(home.workspace, 'api'));
+    const ticket = pathm.join(home.root, 't.txt');
+    fsm.writeFileSync(ticket, 'Title: Show low stock\nAcceptance Criteria:\n1. The dashboard lists the items below their threshold.\n');
+    const first = await cap(() => main(['--from', ticket, '--repo', web, '--json']));
+    const id = (JSON.parse(first.stdout) as { id: string }).id;
+    assert.equal((await cap(() => main(['add-repo', api, '--task', id]))).code, 2, 'no reason');
+    assert.equal((await cap(() => main(['add-repo', api, '--task', id, '--reason', 'x', '--criteria', 'AC9']))).code, 2, 'unknown criterion');
+    assert.equal((await cap(() => main(['add-repo', home.root, '--task', id, '--reason', 'x']))).code, 2, 'not a repository');
+    const ok = await cap(() => main(['add-repo', api, '--task', id, '--reason', 'the list comes from its endpoint', '--criteria', 'ac1']));
+    assert.equal(ok.code, 0, ok.stderr);
+    assert.match(ok.stdout, /Added api to .* for AC1/);
+    const b = loadBrief(id)!;
+    assert.deepEqual(b.addedRepos!.map((a) => [a.path, a.criteria, a.reason]), [[api, ['AC1'], 'the list comes from its endpoint']]);
+    assert.ok(b.baseShas[rid(api)], 'its HEAD is its base');
+    assert.equal(getCurrentTask(rid(api)), id);
+  } finally {
+    home.cleanup();
+  }
+});

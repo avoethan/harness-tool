@@ -196,3 +196,17 @@ test('Stop: edits outside any repo are ignored', () => {
   const o = evaluateStop({ session_id: s }, ctxFor('claude', 'Stop', s));
   assert.equal(o.outcome, 'no-edits');
 });
+
+test('Stop: edits in a second repository the ticket does not cover point at intake add-repo with the ticket id', async () => {
+  const s = sid();
+  writeFile(repo, 'src/a.ts', 'export const a = 9;\n');
+  edit(s);
+  writeEvidence(repo, 't-cross', { verdict: 'PASS', treeHash: treeOf(repo) });
+  const other = makeRepo(path.join(sb.tmp, `other${n}`), { 'src/b.ts': 'export const b = 1;\n' });
+  writeFile(other, 'src/b.ts', 'export const b = 2;\n');
+  recordEdit(s, { path: path.join(other, 'src', 'b.ts'), repo: repoIdFor(other) });
+  const r = await stopHandle({ session_id: s, hook_event_name: 'Stop' }, ctxFor('devin', 'Stop', s));
+  assert.equal(r.exitCode, 2);
+  assert.match(String(r.stderr), /edited, but not part of ticket t-cross/);
+  assert.ok(String(r.stderr).includes(`harness intake add-repo "${other}" --task t-cross`), String(r.stderr));
+});

@@ -25,7 +25,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { CommandMeta } from '../cli';
-import { DEFAULT_BOOLEANS, flagBool, flagStr, parseArgv } from '../lib/argv';
+import { DEFAULT_BOOLEANS, flagBool, flagStr, flagValues, parseArgv } from '../lib/argv';
 import { loadConfig, repoIdFor, resolveConfig } from '../lib/config';
 import { inboxHome } from '../lib/paths';
 import { fetchJiraTicket, fetchNextJiraKey } from '../intake/jira';
@@ -52,7 +52,7 @@ import {
 export const meta: CommandMeta = {
   name: 'intake',
   summary: 'Turn a pasted ticket into a brief with criteria, checks and units',
-  usage: 'harness intake (--from <file|-> | --jira <KEY> | --jira-next) [--repo <path>] [--unattended] [--json] | show [id] | answer <id> (--q <n> --answer "<text>" | --all-recommended) | lint [id] | list',
+  usage: 'harness intake (--from <file|-> | --jira <KEY> | --jira-next) [--repo <path>]... [--unattended] [--json] | show [id] | answer <id> (--q <n> --answer "<text>" | --all-recommended) | lint [id] | list | add-repo <path> --reason "<why>" [--criteria <AC,...>] [--task <id>]',
   examples: ['harness intake --from ticket.txt', 'pbpaste | harness intake --from -', 'harness intake --jira SHOP-102', 'harness intake --jira-next', 'harness intake --from ticket.txt --unattended', 'harness intake show', 'harness intake answer t-1a2b3c4d5e --q 1 --answer B', 'harness intake answer t-1a2b3c4d5e --all-recommended'],
 };
 
@@ -74,10 +74,11 @@ function repoRootFrom(flag: string | undefined): string | undefined {
   return nearestRepoRoot(process.cwd()) ?? undefined;
 }
 
-function ctxFor(repoFlag: string | undefined, unattended = false) {
+function ctxFor(repoFlag: string | undefined, unattended = false, moreRepos: string[] = []) {
   const defaultRepoPath = repoRootFrom(repoFlag);
   const resolved = resolveConfig(defaultRepoPath ?? process.cwd());
-  return { config: resolved.config, defaultRepoPath, ...(repoFlag ? { repoPinned: true } : {}), ...(unattended ? { unattended: true } : {}) };
+  const extra = moreRepos.map((r) => path.resolve(r));
+  return { config: resolved.config, defaultRepoPath, ...(repoFlag ? { repoPinned: true } : {}), ...(extra.length ? { extraRepoPaths: extra } : {}), ...(unattended ? { unattended: true } : {}) };
 }
 
 function repoName(b: BriefFile, id: string): string {
@@ -199,6 +200,8 @@ export async function main(argv: string[]): Promise<number> {
     else for (const b of all) process.stdout.write(`${b.id}  ${b.updatedAt.slice(0, 16)}  ${b.criteria.length} criteria  ${b.title}\n`);
     return 0;
   }
+
+  if (sub === 'add-repo') return addRepo(p.positional[1], flagStr(p, 'task'), flagStr(p, 'reason'), flagStr(p, 'criteria'), json);
 
   if (sub === 'show' || sub === 'lint') {
     const b = pickBrief(p.positional[1], repoFlag);
@@ -358,7 +361,8 @@ export async function main(argv: string[]): Promise<number> {
     process.stderr.write('The ticket is empty. Paste the title, description and acceptance criteria.\n');
     return 2;
   }
-  const ctx = ctxFor(repoFlag, flagBool(p, 'unattended') || process.env.HARNESS_UNATTENDED === '1');
+  const repoFlags = flagValues(p, 'repo');
+  const ctx = ctxFor(repoFlags[0] ?? repoFlag, flagBool(p, 'unattended') || process.env.HARNESS_UNATTENDED === '1', repoFlags.slice(1));
   const b = buildBrief(text, { ...ctx, ...(jiraKey ? { jiraKey } : {}) });
   saveBrief(b);
   setCurrent(b);
@@ -368,4 +372,57 @@ export async function main(argv: string[]): Promise<number> {
   logLint(b);
   process.stdout.write(json ? JSON.stringify(b, null, 2) + '\n' : renderBrief(b));
   return b.lint.length ? 1 : 0;
+}
+
+/**
+ * `harness intake add-repo <path> --reason "<why>" [--criteria AC2,AC3] [--task <id>]`:
+ * the work turned out to need another repository. It joins the same ticket:
+ * its HEAD becomes its base commit, its local changes are recorded as not the
+ * ticket's, it becomes the current task there, and the write-up says it was
+ * added and why. With `--criteria` those criteria also need a change there;
+ * without, it is a supporting change the gate checks with its base steps only.
+ */
+function addRepo(target: string | undefined, taskFlag: string | undefined, reason: string | undefined, criteriaFlag: string | undefined, json: boolean): number {
+  if (!target) {
+    process.stderr.write('Usage: harness intake add-repo <repository folder> --reason "<why the ticket needs it>" [--criteria AC2,AC3] [--task <id>]\n');
+    return 2;
+  }
+  if (!reason || !reason.trim()) {
+    process.stderr.write('add-repo needs --reason "<why the ticket needs this repository>"; the write-up shows it to the reviewer.\n');
+    return 2;
+  }
+  const root = nearestRepoRoot(path.resolve(target));
+  if (!root) {
+    process.stderr.write(`${target} is not inside a git repository.\n`);
+    return 2;
+  }
+  const b = taskFlag ? loadBrief(taskFlag) : pickBrief(undefined, undefined);
+  if (!b) {
+    process.stderr.write('No brief to add the repository to. Pass --task <id> (harness intake list shows them).\n');
+    return 1;
+  }
+  const criteria = (criteriaFlag ?? '').split(/[\s,]+/).filter(Boolean).map((c) => c.toUpperCase());
+  const unknown = criteria.filter((c) => !b.criteria.some((x) => x.id === c));
+  if (unknown.length) {
+    process.stderr.write(`Not criteria of ${b.id}: ${unknown.join(', ')} (it has ${b.criteria.map((c) => c.id).join(', ')}).\n`);
+    return 2;
+  }
+  const id = repoIdFor(root);
+  const prev = b.addedRepos ?? [];
+  const existing = prev.find((a) => repoIdFor(a.path) === id);
+  const entry = { path: root, criteria: [...new Set([...(existing?.criteria ?? []), ...criteria])], reason: reason.trim(), at: new Date().toISOString() };
+  const withAdded: BriefFile = { ...b, addedRepos: [...prev.filter((a) => a !== existing), entry] };
+  const next = reassemble(withAdded, ctxFor(undefined));
+  saveBrief(next);
+  setCurrent(next);
+  recordBriefSnapshots(next, 'intake');
+  instrument({ event: 'intake.add-repo', task: next.id, ids: { brief: next.id, repo: id }, counts: { criteria: entry.criteria.length, repos: next.repos.length } });
+  if (json) {
+    process.stdout.write(JSON.stringify({ id: next.id, repos: next.repos, addedRepos: next.addedRepos, units: next.units }, null, 2) + '\n');
+    return 0;
+  }
+  const name = next.repoMap.repos[id]?.name ?? path.basename(root);
+  process.stdout.write(`Added ${name} to ${next.id}${entry.criteria.length ? ` for ${entry.criteria.join(', ')}` : ' as a supporting change (its gate runs the base steps; no criterion of its own)'}. Its base is its HEAD now; your local changes there are recorded as not the ticket's.\n`);
+  process.stdout.write(renderBrief(next));
+  return 0;
 }

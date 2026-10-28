@@ -346,6 +346,8 @@ export function criteriaForRepo(brief: BriefFile | null, repoId: string): Criter
   const ids = new Set<string>();
   for (const u of brief.units ?? []) if (u.repo === repoId) for (const c of u.criteria) ids.add(c);
   if (!ids.size) {
+    // a repository added during the ticket for a supporting change carries no criterion of its own
+    if ((brief.addedRepos ?? []).some((a) => repoIdFor(a.path) === repoId)) return [];
     const repos = brief.repos ?? [];
     const metaRepos = Object.values(brief.criteriaMeta ?? {}).flatMap((m) => m.repos ?? []);
     if (!repos.length || repos.includes(repoId) || (!metaRepos.length && repos.length <= 1)) return brief.criteria;
