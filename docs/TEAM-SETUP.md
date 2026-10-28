@@ -164,26 +164,26 @@ harness config set jira.filter "parent = EPIC-1 AND status = 'Ready for dev' ORD
 harness config set jira.filter "'Epic Link' = EPIC-1 AND status = 'Ready for dev' ORDER BY rank"    # Jira Data Center
 ```
 
-The brief's `repo:` line says which repository each criterion goes to, and
-how the harness chose it. If it picked the wrong one, say which:
-`harness intake --jira SHOP-102 --repo C:\code\<project>\<repo>` (or tell
-the agent "it's in <repo>"). A repository you name wins over the guess and is
-kept when questions are answered; a criterion that names another repository
-by name still goes there.
+You do not tell the harness which repositories a ticket touches. Intake
+searches every repository of the workspace for the ticket's concrete details
+(route paths, table names, file paths, identifiers such as `LowStockPanel` or
+`stock_levels`) and places each criterion where they are found. The brief
+shows it: `repo: stock-api, web-dashboard (code)` and a `found:` line with the
+files. Where the ticket has nothing concrete, it falls back to names
+(`(resource)`: "the dashboard" -> `web-dashboard`), or leaves the criterion
+`unmapped` with a `git grep` to start from. During the work the agent reads
+the code and, when the change needs a repository the brief does not list (the
+endpoint's caller, a shared type, a migration), adds it itself with the files
+it found as the reason (`harness intake add-repo`); that repository joins the
+ticket with its own base commit, your local changes there are left out like in
+the others, and the write-up's Scope says it was added and why. `harness intake
+scout` prints the evidence per criterion and `--apply` adds what the brief
+misses. The search is read-only and bounded (about four seconds, large and
+generated folders skipped).
 
-Tickets across several repositories:
-
-- **Known at the start**: name them all, `--repo <a> --repo <b>` (or tell the
-  agent "it touches <a> and <b>"). Each criterion is placed among those;
-  the brief makes one unit per repository, the gate runs in each, and there
-  is one write-up per repository with the order to land them.
-- **Found on the way**: the agent stops and asks when the work needs a
-  repository the brief does not list. If you agree, it runs
-  `harness intake add-repo <folder> --reason "<why>"` (with `--criteria AC2`
-  when a criterion needs a change there too). That repository joins the same
-  ticket with its own base commit, your local changes there are left out like
-  in the others, and the write-up's Scope says it was added and why. Edits in
-  an unlisted repository also stop the agent with that command in the message.
+If it still picks wrong, say so: `harness intake --jira SHOP-102 --repo
+C:\code\<project>\<repo>` (repeat `--repo` for several), or tell the agent
+"it's in <repo>"; a repository you name wins over the search.
 
 Optional, to take the next ticket from a saved search instead of naming it:
 

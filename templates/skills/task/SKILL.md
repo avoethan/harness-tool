@@ -75,12 +75,25 @@ exists for people typing in a terminal.
 When the user gives a ticket key (for example `SHOP-102`) instead of pasted
 text, run `harness intake --jira SHOP-102`; it reads the ticket itself.
 
-When the user says which repository the ticket is in, add
-`--repo <that repository's folder>` to the intake command; it wins over the
-harness's own guess. When the ticket spans several, repeat it (`--repo <a>
---repo <b>`); each criterion is placed among those. When the brief's `repo:`
-line names a repository the user did not expect, ask before going on, and run
-intake again with `--repo`.
+Which repositories: the brief works that out, not the user. Intake searches
+every repository of the workspace for the ticket's routes, tables, file paths
+and identifiers and places each criterion where they are found (`repo: ...
+(code)`, with a `found:` line naming the files). Read those lines. Then:
+
+- `(code)`: trust it; the evidence is the files named.
+- `(resource)`, `(ticket)`, `(default)`, `(only-repo)`: a guess from names.
+  Check it in your investigation (phase 2 starts by reading the code the
+  criterion is about); if the code lives elsewhere, run
+  `harness intake add-repo <folder> --criteria <AC ids> --reason "<the files you found>"`.
+- `unmapped`: nothing in the ticket points anywhere. Investigate (the brief
+  prints a `git grep` to start from), then `add-repo` with what you found.
+- `harness intake scout` searches again (after you learned new names, or
+  when a repository was missing from the workspace list) and prints the
+  evidence per criterion; `harness intake scout --apply` adds every
+  repository with evidence the brief lacks.
+
+Only when the user names the repository themselves, pass it:
+`--repo <folder>` (repeat it for several). That wins over the search.
 
 Expected output (shape):
 
@@ -373,14 +386,16 @@ to ask instead.
    `harness gate --blocked "<step> fails after 3 fixes: <why>"`.
 4. **The problem cannot be reproduced**: the bug the ticket describes does
    not happen on the test setup, so no check can go red.
-5. **Scope grows beyond the ticket's units**: the change needs repos, files
-   or behaviour the brief does not cover. When it is another repository, say
-   which one and why, and ask. If the user agrees, run
-   `harness intake add-repo <its folder> --reason "<why>"` (add
-   `--criteria AC2` when a criterion needs a change there too), then carry on:
-   that repository gets its own base, gate and write-up, and the write-up says
-   it was added and why. Do not edit a repository the brief does not list
-   before that.
+5. **Scope grows beyond the ticket**: the change needs behaviour the ticket
+   does not ask for. Another *repository* is not a stop: when the
+   investigation shows the change needs one the brief does not list (the
+   caller of the endpoint, the shared type, the migration), run
+   `harness intake add-repo <its folder> --reason "<the files you found and why>"`
+   (add `--criteria AC2` when a criterion needs a change there too) and carry
+   on; it gets its own base, gate and write-up, and the write-up tells the
+   user it was added and why. Add it before editing it, never after. Ask the
+   user only when you cannot tell which repository, or the evidence is
+   contradictory.
 {{#personal}}
 
 `harness run check-stop` reports these conditions when the runner drives you.

@@ -111,6 +111,8 @@ export interface BriefFile extends Brief {
   pinnedRepos?: string[];
   /** Repositories added after intake (`harness intake add-repo`), when the work turned out to need them. */
   addedRepos?: AddedRepo[];
+  /** Where the ticket's routes, tables, paths and identifiers were found in the code (src/intake/scout.ts). */
+  scout?: ScoutResult;
 }
 
 export interface AddedRepo {
@@ -134,6 +136,10 @@ export interface IntakeContext {
   repoPinned?: boolean;
   /** More repositories named with repeated `--repo`; the ticket's criteria are placed among these and `defaultRepoPath`. */
   extraRepoPaths?: string[];
+  /** Search the code again instead of reusing the brief's stored scout (`harness intake scout`). */
+  rescout?: boolean;
+  /** Skip the code search (tests of other parts). */
+  noScout?: boolean;
   now?: Date;
   /**
    * No one is there to answer (`harness intake --unattended`, `HARNESS_UNATTENDED=1`, the personal runner):
@@ -232,6 +238,7 @@ interface Seed {
   pinnedRepo?: string;
   pinnedRepos?: string[];
   addedRepos?: AddedRepo[];
+  scout?: ScoutResult;
 }
 
 /** Parse a pasted ticket and build the brief. */
@@ -263,6 +270,7 @@ export function buildBrief(text: string, ctx: IntakeContext): BriefFile {
         ? { pinnedRepo: previous.pinnedRepo, ...(previous.pinnedRepos?.length ? { pinnedRepos: previous.pinnedRepos } : {}) }
         : {}),
     ...(previous && previous.ticketHash === parsed.hash && previous.addedRepos?.length ? { addedRepos: previous.addedRepos } : {}),
+    ...(previous && previous.ticketHash === parsed.hash && previous.scout ? { scout: previous.scout } : {}),
   };
   return assemble(seed, ctx, now);
 }
@@ -292,8 +300,11 @@ function seedOf(b: BriefFile): Seed {
     ...(b.pinnedRepo ? { pinnedRepo: b.pinnedRepo } : {}),
     ...(b.pinnedRepos?.length ? { pinnedRepos: b.pinnedRepos } : {}),
     ...(b.addedRepos?.length ? { addedRepos: b.addedRepos } : {}),
+    ...(b.scout ? { scout: b.scout } : {}),
   };
 }
+
+import { scout as scoutRepos, scoutTerms, type ScoutResult } from './scout';
 
 const FACT_TOPICS = new Set(['meaning', 'measure']);
 
@@ -323,6 +334,20 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
   const meta: Record<string, CriterionMeta> = {};
   const byCriterion: Record<string, string[]> = {};
 
+  // Where the ticket's details are in the code: once per ticket, kept in the brief; `rescout` searches again.
+  const factsOf = (c: Seed['criteria'][number]): CriterionFacts => {
+    const clar = seed.clarifications.filter((x) => x.criterionId === c.id && FACT_TOPICS.has(x.topic)).map((x) => x.a);
+    const text = clar.length ? `${c.text} (${clar.join('; ')})` : c.text;
+    const own = extractFacts(text);
+    return applyTicketEndpoint(text, own, endpoints) ?? own;
+  };
+  let sc: ScoutResult | undefined = ctx.noScout ? undefined : seed.scout && !ctx.rescout ? seed.scout : undefined;
+  if (!sc && !ctx.noScout && infos.length) {
+    const terms: Record<string, ReturnType<typeof scoutTerms>> = {};
+    for (const c of seed.criteria) terms[c.id] = scoutTerms(factsOf(c), c.text);
+    sc = scoutRepos(terms, infos);
+  }
+
   for (const c of seed.criteria) {
     const clar = seed.clarifications.filter((x) => x.criterionId === c.id);
     const factAnswers = clar.filter((x) => FACT_TOPICS.has(x.topic)).map((x) => x.a);
@@ -343,7 +368,9 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
         : { repos: [defaultRepo!], how: 'given' }
       : pinned && defaultRepo && guessed.how !== 'mention'
         ? { repos: [defaultRepo], how: 'given' }
-        : guessed;
+        : guessed.how !== 'mention' && guessed.how !== 'path' && sc?.byCriterion[c.id]?.length
+          ? { repos: sc.byCriterion[c.id].filter((id) => byId.has(id)), how: 'code' }
+          : guessed;
     // a repository added during the ticket for this criterion: the criterion needs a change there too
     const also = added.filter((a) => a.criteria.includes(c.id)).map((a) => repoIdFor(a.path)).filter((id) => !first.repos.includes(id));
     const match: RepoMatch = also.length ? { repos: [...first.repos, ...also], how: first.how } : first;
@@ -497,6 +524,7 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
     ...(seed.pinnedRepo ? { pinnedRepo: seed.pinnedRepo } : {}),
     ...(seed.pinnedRepos?.length ? { pinnedRepos: seed.pinnedRepos } : {}),
     ...(seed.addedRepos?.length ? { addedRepos: seed.addedRepos } : {}),
+    ...(sc ? { scout: sc } : {}),
   };
 }
 

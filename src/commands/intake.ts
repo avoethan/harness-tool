@@ -30,6 +30,8 @@ import { loadConfig, repoIdFor, resolveConfig } from '../lib/config';
 import { inboxHome } from '../lib/paths';
 import { fetchJiraTicket, fetchNextJiraKey } from '../intake/jira';
 import { instrument } from '../lib/log';
+import { extractFacts, repoInfos } from '../intake/classify';
+import { evidenceLine, scout, scoutTerms } from '../intake/scout';
 import { nearestRepoRoot } from '../lib/git';
 import { formatQuestionsBlock } from '../intake/ambiguity';
 import { UNMAPPED } from '../intake/units';
@@ -52,14 +54,14 @@ import {
 export const meta: CommandMeta = {
   name: 'intake',
   summary: 'Turn a pasted ticket into a brief with criteria, checks and units',
-  usage: 'harness intake (--from <file|-> | --jira <KEY> | --jira-next) [--repo <path>]... [--unattended] [--json] | show [id] | answer <id> (--q <n> --answer "<text>" | --all-recommended) | lint [id] | list | add-repo <path> --reason "<why>" [--criteria <AC,...>] [--task <id>]',
+  usage: 'harness intake (--from <file|-> | --jira <KEY> | --jira-next) [--repo <path>]... [--unattended] [--json] | show [id] | answer <id> (--q <n> --answer "<text>" | --all-recommended) | lint [id] | list | scout [id] [--apply] | add-repo <path> --reason "<why>" [--criteria <AC,...>] [--task <id>]',
   examples: ['harness intake --from ticket.txt', 'pbpaste | harness intake --from -', 'harness intake --jira SHOP-102', 'harness intake --jira-next', 'harness intake --from ticket.txt --unattended', 'harness intake show', 'harness intake answer t-1a2b3c4d5e --q 1 --answer B', 'harness intake answer t-1a2b3c4d5e --all-recommended'],
 };
 
 const MAX_TICKET_BYTES = 1024 * 1024;
 
 /** `--q <n>` takes a value here (globally `-q`/`--q` is the quiet switch). */
-const BOOLEANS = new Set([...DEFAULT_BOOLEANS, 'unattended', 'all-recommended', 'jira-next'].filter((b) => b !== 'q'));
+const BOOLEANS = new Set([...DEFAULT_BOOLEANS, 'unattended', 'all-recommended', 'jira-next', 'apply'].filter((b) => b !== 'q'));
 
 function readStdin(): string {
   try {
@@ -106,6 +108,7 @@ export function renderBrief(b: BriefFile, local: string[] = snapshotLines(briefS
       if (c.check.command) for (const line of c.check.command.split('\n')) out.push(`        run:   ${line}`);
     } else if (c.question) out.push('        check: waits for an answer (see Questions)');
     if (m && m.repos.length) out.push(`        repo:  ${m.repos.map((r) => repoName(b, r)).join(', ')} (${m.repoHow})`);
+    if (m && m.repoHow === 'code') for (const r of m.repos) if (b.scout?.evidence[c.id]?.[r]) out.push(`        found: ${evidenceLine(repoName(b, r), b.scout.evidence[c.id][r])}`);
   }
   if (b.dropped.length) out.push(`  Dropped by your answers: ${b.dropped.map((d) => d.id).join(', ')}`);
   out.push('');
@@ -201,6 +204,7 @@ export async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (sub === 'scout') return scoutCmd(p.positional[1], repoFlag, flagBool(p, 'apply'), json);
   if (sub === 'add-repo') return addRepo(p.positional[1], flagStr(p, 'task'), flagStr(p, 'reason'), flagStr(p, 'criteria'), json);
 
   if (sub === 'show' || sub === 'lint') {
@@ -424,5 +428,64 @@ function addRepo(target: string | undefined, taskFlag: string | undefined, reaso
   const name = next.repoMap.repos[id]?.name ?? path.basename(root);
   process.stdout.write(`Added ${name} to ${next.id}${entry.criteria.length ? ` for ${entry.criteria.join(', ')}` : ' as a supporting change (its gate runs the base steps; no criterion of its own)'}. Its base is its HEAD now; your local changes there are recorded as not the ticket's.\n`);
   process.stdout.write(renderBrief(next));
+  return 0;
+}
+
+/**
+ * `harness intake scout [id] [--apply] [--json]`: search the workspace's code
+ * again for the ticket's routes, tables, paths and identifiers, show per
+ * criterion where they were found, and name the repositories with evidence
+ * the brief does not list. `--apply` adds those (as `add-repo` would, the
+ * evidence as the reason) and re-places the criteria on the new search.
+ */
+function scoutCmd(id: string | undefined, repoFlag: string | undefined, apply: boolean, json: boolean): number {
+  const b = pickBrief(id, repoFlag);
+  if (!b) {
+    process.stderr.write('No brief found. Run: harness intake --from <file|-> (or pass the brief id).\n');
+    return 1;
+  }
+  const ctx = ctxFor(undefined);
+  const infos = repoInfos(ctx.config, [...Object.values(b.repoMap.repos).map((r) => r.path), ...(b.addedRepos ?? []).map((a) => a.path)]);
+  const terms: Record<string, ReturnType<typeof scoutTerms>> = {};
+  for (const c of b.criteria) terms[c.id] = scoutTerms(b.criteriaMeta[c.id]?.facts ?? extractFacts(c.text), c.text);
+  const sc = scout(terms, infos, { budgetMs: 15000 });
+  const nameOf = (rid: string) => infos.find((r) => r.id === rid)?.name ?? rid;
+  const missing = new Map<string, Set<string>>();
+  for (const c of b.criteria) for (const rid of sc.byCriterion[c.id] ?? []) if (!b.repos.includes(rid)) (missing.get(rid) ?? missing.set(rid, new Set()).get(rid)!).add(c.id);
+  if (json) {
+    process.stdout.write(JSON.stringify({ id: b.id, scout: sc, missing: [...missing].map(([rid, cs]) => ({ repoId: rid, name: nameOf(rid), path: infos.find((r) => r.id === rid)?.path, criteria: [...cs] })) }, null, 2) + '\n');
+    if (!apply) return 0;
+  } else {
+    process.stdout.write(`Scout for ${b.id} over ${infos.length} repositor${infos.length === 1 ? 'y' : 'ies'}${sc.budgetHit ? ' (some walks stopped at the budget; what was found holds)' : ''}:\n`);
+    for (const c of b.criteria) {
+      const ev = sc.evidence[c.id] ?? {};
+      const rids = sc.byCriterion[c.id] ?? [];
+      process.stdout.write(`  ${c.id}: ${rids.length ? rids.map(nameOf).join(', ') : sc.noTerms.includes(c.id) ? 'nothing concrete to search for (no route, table, path or identifier in the text)' : 'no file holds its details'}\n`);
+      for (const rid of rids) process.stdout.write(`       ${evidenceLine(nameOf(rid), ev[rid] ?? [])}\n`);
+    }
+    if (!missing.size) process.stdout.write('Every repository with evidence is in the brief.\n');
+    else {
+      process.stdout.write('Repositories with evidence the brief does not list:\n');
+      for (const [rid, cs] of missing) process.stdout.write(`  ${nameOf(rid)} for ${[...cs].join(', ')}${apply ? '' : `  -> harness intake add-repo "${infos.find((r) => r.id === rid)?.path}" --task ${b.id} --criteria ${[...cs].join(',')} --reason "<why>"`}\n`);
+      if (!apply) process.stdout.write('Add them all with: harness intake scout --apply\n');
+    }
+  }
+  if (!apply) return 0;
+  let next: BriefFile = { ...b, scout: sc };
+  const at = new Date().toISOString();
+  for (const [rid, cs] of missing) {
+    const info = infos.find((r) => r.id === rid)!;
+    const reason = `found in the code: ${[...cs].map((cid) => evidenceLine(info.name, sc.evidence[cid]?.[rid] ?? [])).join(' | ')}`.slice(0, 400);
+    next = { ...next, addedRepos: [...(next.addedRepos ?? []).filter((a) => repoIdFor(a.path) !== rid), { path: info.path, criteria: [...cs], reason, at }] };
+  }
+  next = reassemble(next, ctx);
+  saveBrief(next);
+  setCurrent(next);
+  recordBriefSnapshots(next, 'intake');
+  instrument({ event: 'intake.scout', task: next.id, ids: { brief: next.id }, counts: { repos: next.repos.length, added: missing.size, withEvidence: Object.values(sc.byCriterion).filter((r) => r.length).length } });
+  if (!json) {
+    process.stdout.write(missing.size ? `Added ${[...missing.keys()].map(nameOf).join(', ')}; criteria re-placed on the new search.\n` : 'Criteria re-placed on the new search.\n');
+    process.stdout.write(renderBrief(next));
+  }
   return 0;
 }

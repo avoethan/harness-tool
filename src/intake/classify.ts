@@ -818,13 +818,15 @@ function resourceTokens(facts: CriterionFacts): string[] {
   return [...toks];
 }
 
+const GENERIC_NAME_PARTS = new Set(['service', 'services', 'server', 'client', 'frontend', 'backend', 'common', 'shared', 'core', 'utils', 'tools', 'internal', 'public', 'private', 'legacy', 'platform', 'project', 'projects', 'system', 'company', 'portal', 'website', 'application', 'module', 'package', 'library', 'infra', 'infrastructure', 'config', 'scripts', 'main', 'master']);
+
 function singular(s: string): string {
   return s.replace(/ies$/, 'y').replace(/(?<!s)s$/, '');
 }
 
 export interface RepoMatch {
   repos: string[];
-  how: 'mention' | 'path' | 'resource' | 'ticket' | 'default' | 'only-repo' | 'given' | 'none';
+  how: 'mention' | 'path' | 'resource' | 'ticket' | 'default' | 'only-repo' | 'given' | 'code' | 'none';
 }
 
 /** Repos for one criterion; `ticketRepos` are the repos the ticket as a whole mentions. */
@@ -839,6 +841,10 @@ export function mapCriterionRepos(text: string, facts: CriterionFacts, repos: Re
     if (inTicket.length === 1) return { repos: inTicket, how: 'resource' };
     if (cand.length === 1) return { repos: cand, how: 'resource' };
   }
+  // a distinctive part of a repository's name used as a plain word ("the dashboard" -> web-dashboard); generic parts never count
+  const words = new Set((text.toLowerCase().match(/[a-z][a-z0-9]{4,}/g) ?? []).map(singular));
+  const byWord = repos.filter((r) => r.aliases.some((a) => a.toLowerCase().split(/[-_\s/@.]+/).some((p) => p.length >= 5 && !GENERIC_NAME_PARTS.has(p) && words.has(singular(p))))).map((r) => r.id);
+  if (byWord.length === 1) return { repos: byWord, how: 'resource' };
   if (ticketRepos.length === 1) return { repos: ticketRepos, how: 'ticket' };
   if (defaultRepo && (ticketRepos.length === 0 || ticketRepos.includes(defaultRepo))) return { repos: [defaultRepo], how: 'default' };
   if (repos.length === 1) return { repos: [repos[0].id], how: 'only-repo' };

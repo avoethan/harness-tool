@@ -223,7 +223,7 @@ function renderBlock(blocking: RepoStop[], all: RepoStop[], cap: number): string
     const cmd = `harness gate --repo "${r.root}"`;
     // edits in a repository the ticket of the other edited repositories does not cover
     const ticket = r.state === 'no-evidence' && !r.taskId ? all.find((x) => x.taskId)?.taskId : undefined;
-    if (ticket) lines.push(`- ${r.name}: edited, but not part of ticket ${ticket}. Ask the user whether the ticket needs ${r.name}; if they agree, run: harness intake add-repo "${r.root}" --task ${ticket} --reason "<why>" [--criteria AC1], then: ${cmd}. If not, undo the edits there.`);
+    if (ticket) lines.push(`- ${r.name}: edited, but not part of ticket ${ticket}. If the ticket needs ${r.name}, add it with the evidence as the reason: harness intake add-repo "${r.root}" --task ${ticket} --reason "<which files and why>" [--criteria AC1], then: ${cmd}. If it does not, undo the edits there.`);
     else if (r.state === 'no-evidence') lines.push(`- ${r.name}: no evidence yet. Run: ${cmd}`);
     else if (r.state === 'stale') lines.push(`- ${r.name}: the ${r.verdict} evidence is stale (${r.reasons[0] ?? 'the working tree changed after the gate ran'}). Run: ${cmd}`);
     else if (r.state === 'fail') {
