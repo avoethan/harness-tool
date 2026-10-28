@@ -34,7 +34,7 @@ export const meta: CommandMeta = {
 };
 
 /** Top-level keys `set` may touch. Everything else is refused. */
-export const SETTABLE_TOP = new Set(['setting', 'agents', 'workspaceRoot', 'repos', 'mcp', 'caps', 'include', 'reviews', 'verify', 'jira']);
+export const SETTABLE_TOP = new Set(['setting', 'agents', 'workspaceRoot', 'repos', 'mcp', 'caps', 'include', 'reviews', 'verify', 'jira', 'intake']);
 
 /** Keys that `set` must never write: the DB allowlist has its own command with a hash; the rest is bookkeeping. */
 export function refusedKeyReason(key: string): string | null {
@@ -72,6 +72,9 @@ export function setConfigValue(c: HarnessConfig, key: string, value: unknown): s
       break;
     case 'reviews.source':
       if (value !== 'github-api' && value !== 'pasted' && value !== 'none') return 'reviews.source must be github-api, pasted or none';
+      break;
+    case 'intake.unattended':
+      if (typeof value !== 'boolean') return 'intake.unattended must be true or false';
       break;
     case 'jira.baseUrl': {
       let u: URL | null = null;

@@ -107,15 +107,23 @@ test('a plain word of a distinctive repository name places a criterion with noth
 
 test('harness intake scout: prints the evidence per criterion and the repositories the brief lacks; --apply adds them with the evidence as the reason', async () => {
   const api = repo('orders-api', { 'src/routes.ts': "router.get('/orders/open', list);\n" });
-  const web = repo('orders-web', { 'src/page.ts': "fetch('/orders/open');\n" });
-  saveConfig(defaultConfig({ setting: 'team', workspaceRoot: h.workspace, repos: [{ id: repoIdFor(api), name: 'orders-api', path: api, packageManager: 'npm', isGit: true }] }));
+  const web = repo('orders-web', { 'src/page.ts': "fetch('/orders/open');\n" }); // in another folder, outside the workspace
+  const ws = path.dirname(api);
+  saveConfig(defaultConfig({ setting: 'team', workspaceRoot: ws, repos: [{ id: repoIdFor(api), name: 'orders-api', path: api, packageManager: 'npm', isGit: true }] }));
   const ticket = path.join(h.root, 'orders.txt');
   write(ticket, 'Title: Open orders\nAcceptance Criteria:\n1. GET /orders/open lists the open orders.\n');
-  const first = await capture(() => intakeMain(['--from', ticket, '--json']));
-  const b = JSON.parse(first.stdout) as { id: string; repos: string[] };
-  assert.deepEqual(b.repos, [repoIdFor(api)], 'orders-web is not in the workspace list, so intake could not see it');
-  // the workspace list grows; scout sees the caller now
-  saveConfig(defaultConfig({ setting: 'team', workspaceRoot: h.workspace, repos: [api, web].map((p) => ({ id: repoIdFor(p), name: path.basename(p), path: p, packageManager: 'npm' as const, isGit: true })) }));
+  const prev = process.cwd();
+  process.chdir(ws);
+  let b: { id: string; repos: string[] };
+  try {
+    const first = await capture(() => intakeMain(['--from', ticket, '--json']));
+    b = JSON.parse(first.stdout) as { id: string; repos: string[] };
+    assert.deepEqual(b.repos, [repoIdFor(api)], 'orders-web is outside the workspace, so intake could not see it');
+  } finally {
+    process.chdir(prev);
+  }
+  // the caller is added to the workspace list (an --include-like case); scout sees it now
+  saveConfig(defaultConfig({ setting: 'team', workspaceRoot: ws, repos: [api, web].map((p) => ({ id: repoIdFor(p), name: path.basename(p), path: p, packageManager: 'npm' as const, isGit: true })) }));
   const shown = await capture(() => intakeMain(['scout', b.id]));
   assert.equal(shown.code, 0, shown.stderr);
   assert.match(shown.stdout, /AC1: orders-api, orders-web/);
@@ -127,4 +135,43 @@ test('harness intake scout: prints the evidence per criterion and the repositori
   assert.match(after.addedRepos![0].reason, /^found in the code: orders-web: route \/orders\/open in 1 file \(src\/page\.ts\)/);
   assert.deepEqual(after.addedRepos![0].criteria, ['AC1']);
   assert.ok(after.baseShas[repoIdFor(web)]);
+});
+
+test('intake sees the repositories as they are now: one cloned into the workspace after the install is searched and placed, without any config change', async () => {
+  const api = repo('ledger-api', { 'src/routes.ts': "router.get('/ledger/balance', balance);\n" });
+  const ws = path.dirname(api);
+  // the install recorded no repositories at all; the session runs in the workspace folder
+  saveConfig(defaultConfig({ setting: 'team', workspaceRoot: ws, repos: [] }));
+  const ticket = path.join(h.root, 'ledger.txt');
+  write(ticket, 'Title: Balance\nAcceptance Criteria:\n1. GET /ledger/balance returns the balance.\n');
+  const prev = process.cwd();
+  process.chdir(ws);
+  try {
+    const r = await capture(() => intakeMain(['--from', ticket, '--json']));
+    const b = JSON.parse(r.stdout) as { repos: string[]; criteriaMeta: Record<string, { repoHow: string }> };
+    assert.deepEqual(b.repos, [repoIdFor(api)]);
+    assert.equal(b.criteriaMeta.AC1.repoHow, 'code');
+  } finally {
+    process.chdir(prev);
+  }
+  // the config file itself is unchanged
+  const { loadConfig } = await import('../../../src/lib/config');
+  assert.deepEqual(loadConfig()!.repos, []);
+});
+
+test('intake.unattended in the config takes the recommended answer to a blocking question, recorded as an assumption, like --unattended', async () => {
+  const { setConfigValue } = await import('../../../src/commands/config');
+  const cfg = defaultConfig({ setting: 'team', workspaceRoot: h.workspace, repos: [] });
+  assert.equal(setConfigValue(cfg, 'intake.unattended', 'yes' as never), 'intake.unattended must be true or false');
+  assert.equal(setConfigValue(cfg, 'intake.unattended', true), null);
+  saveConfig(cfg);
+  const ticket = path.join(h.root, 'vague.txt');
+  write(ticket, 'Title: Faster search\nAcceptance Criteria:\n1. Search is fast enough.\n');
+  const r = await capture(() => intakeMain(['--from', ticket, '--json']));
+  const b = JSON.parse(r.stdout) as { clarifications: Array<{ unattended?: boolean }>; assumptions: string[]; criteria: Array<{ check?: unknown }> };
+  assert.ok(b.clarifications.length && b.clarifications.every((c) => c.unattended), JSON.stringify(b.clarifications));
+  assert.ok(b.assumptions.some((a) => /unattended/.test(a)), JSON.stringify(b.assumptions));
+  assert.ok(b.criteria.every((c) => c.check), 'the criterion is not held open');
+  cfg.intake = { unattended: false };
+  saveConfig(cfg);
 });

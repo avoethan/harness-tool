@@ -95,6 +95,14 @@ and identifiers and places each criterion where they are found (`repo: ...
 Only when the user names the repository themselves, pass it:
 `--repo <folder>` (repeat it for several). That wins over the search.
 
+The session usually starts in the workspace folder that holds the
+repositories, not inside one of them; that is the normal case. Intake finds
+the repositories under it as they are now (a repository cloned after the
+install counts). Every later command takes the repository explicitly:
+`harness gate --repo "<root>"`, `harness phase ... --repo "<root>"`, one per
+repository the brief lists; the brief and the Stop hook print the exact
+commands.
+
 Expected output (shape):
 
 ```

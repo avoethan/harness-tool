@@ -181,6 +181,26 @@ scout` prints the evidence per criterion and `--apply` adds what the brief
 misses. The search is read-only and bounded (about four seconds, large and
 generated folders skipped).
 
+The repositories are found as they are now under the workspace folder and
+the folder the session is in, not only as the install recorded them: a
+repository cloned since the install is searched like the others, with no
+command to run.
+
+Hands-off intake. By default a blocking question (a criterion that cannot
+be checked as written, e.g. "search is fast enough") is shown with options
+and a recommended answer, and the agent waits for you. To not be asked:
+
+```powershell
+harness config set intake.unattended true
+```
+
+Then every intake takes the recommended option, records it as an assumption
+in the brief and in the write-up's Assumptions section, and goes on. You see
+the choice in the pull request text instead of in chat; overturn one with
+`harness intake answer <id> --q <n> --answer "<text>"` and the agent redoes
+that criterion. Non-blocking questions already proceeded on their
+recommended option before.
+
 If it still picks wrong, say so: `harness intake --jira SHOP-102 --repo
 C:\code\<project>\<repo>` (repeat `--repo` for several), or tell the agent
 "it's in <repo>"; a repository you name wins over the search.
@@ -338,7 +358,8 @@ self-check page.
 
 ## 5. Drive a ticket
 
-In the agent's chat, in the repository the ticket is about, paste the ticket
+In the agent's chat, in your workspace folder (the one holding the
+repositories; a session inside one repository works too), paste the ticket
 with one line in front:
 
 ```

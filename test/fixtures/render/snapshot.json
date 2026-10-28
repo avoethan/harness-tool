@@ -2,7 +2,7 @@
   "team:devin": {
     "~/.agents/skills/learn/SKILL.md": "0d127c14a9e20d98",
     "~/.agents/skills/setup/SKILL.md": "743b6f7f38dd2e6d",
-    "~/.agents/skills/task/SKILL.md": "18f5bc9ec7d936d4",
+    "~/.agents/skills/task/SKILL.md": "7a1d9fb7aa9907d5",
     "~/.config/devin/AGENTS.md": "422b1ba2f0543716",
     "~/.config/devin/config.json": "fb60260709104f62",
     "~/.devin/rules/alpha.md": "02040acaa770e212",
@@ -17,12 +17,12 @@
     "~/.claude/settings.json": "7698fdfcfe91975c",
     "~/.claude/skills/learn/SKILL.md": "b055ec6cb1349d1f",
     "~/.claude/skills/setup/SKILL.md": "ce4ac007a5d5cd66",
-    "~/.claude/skills/task/SKILL.md": "18f5bc9ec7d936d4"
+    "~/.claude/skills/task/SKILL.md": "7a1d9fb7aa9907d5"
   },
   "team:codex": {
     "~/.agents/skills/learn/SKILL.md": "0d127c14a9e20d98",
     "~/.agents/skills/setup/SKILL.md": "743b6f7f38dd2e6d",
-    "~/.agents/skills/task/SKILL.md": "18f5bc9ec7d936d4",
+    "~/.agents/skills/task/SKILL.md": "7a1d9fb7aa9907d5",
     "~/.codex/AGENTS.md": "ccf6bc41fe71d46f",
     "~/.codex/config.toml": "23137644fd48ae4a",
     "~/.codex/hooks.json": "829f84a1a76f6b6a",
@@ -31,7 +31,7 @@
   "team:devin+claude+codex": {
     "~/.agents/skills/learn/SKILL.md": "0d127c14a9e20d98",
     "~/.agents/skills/setup/SKILL.md": "743b6f7f38dd2e6d",
-    "~/.agents/skills/task/SKILL.md": "18f5bc9ec7d936d4",
+    "~/.agents/skills/task/SKILL.md": "7a1d9fb7aa9907d5",
     "~/.claude/CLAUDE.md": "fbeac7c618317840",
     "~/.claude/rules/alpha.md": "3e7697d4bba28503",
     "~/.claude/rules/beta-packages-api.md": "223db3b330e0360f",
@@ -39,7 +39,7 @@
     "~/.claude/settings.json": "7698fdfcfe91975c",
     "~/.claude/skills/learn/SKILL.md": "b055ec6cb1349d1f",
     "~/.claude/skills/setup/SKILL.md": "ce4ac007a5d5cd66",
-    "~/.claude/skills/task/SKILL.md": "18f5bc9ec7d936d4",
+    "~/.claude/skills/task/SKILL.md": "7a1d9fb7aa9907d5",
     "~/.codex/AGENTS.md": "ccf6bc41fe71d46f",
     "~/.codex/config.toml": "23137644fd48ae4a",
     "~/.codex/hooks.json": "829f84a1a76f6b6a",

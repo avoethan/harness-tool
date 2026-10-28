@@ -48,6 +48,8 @@ export interface HarnessConfig {
   land?: LandConfig;
   /** Jira settings for `harness intake --jira <KEY>` (optional; machine config only, read-only use). */
   jira?: JiraConfig;
+  /** Intake settings (optional). */
+  intake?: IntakeConfig;
   createdAt: string;
   updatedAt: string;
 }
@@ -125,6 +127,16 @@ export interface VerifyConfig {
   portBase?: number;
   /** How long a service may take to answer after start (default 90000). */
   readyTimeoutMs?: number;
+}
+
+export interface IntakeConfig {
+  /**
+   * Nobody answers questions during intake: a blocking question takes its
+   * recommended option, recorded as an assumption in the brief and the
+   * write-up, and the criterion is not held open (`harness config set
+   * intake.unattended true`). Same as `--unattended` on every intake.
+   */
+  unattended?: boolean;
 }
 
 export interface RepoRef {

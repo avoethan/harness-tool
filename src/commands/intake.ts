@@ -33,6 +33,8 @@ import { instrument } from '../lib/log';
 import { extractFacts, repoInfos } from '../intake/classify';
 import { evidenceLine, scout, scoutTerms } from '../intake/scout';
 import { nearestRepoRoot } from '../lib/git';
+import { findRepos } from '../assess/project';
+import type { HarnessConfig, RepoRef } from '../types';
 import { formatQuestionsBlock } from '../intake/ambiguity';
 import { UNMAPPED } from '../intake/units';
 import { briefSnapshots, recordBriefSnapshots, snapshotLines } from '../intake/localchanges';
@@ -80,7 +82,41 @@ function ctxFor(repoFlag: string | undefined, unattended = false, moreRepos: str
   const defaultRepoPath = repoRootFrom(repoFlag);
   const resolved = resolveConfig(defaultRepoPath ?? process.cwd());
   const extra = moreRepos.map((r) => path.resolve(r));
-  return { config: resolved.config, defaultRepoPath, ...(repoFlag ? { repoPinned: true } : {}), ...(extra.length ? { extraRepoPaths: extra } : {}), ...(unattended ? { unattended: true } : {}) };
+  const config = withLiveRepos(resolved.config, process.cwd());
+  const hands = unattended || config.intake?.unattended === true;
+  return { config, defaultRepoPath, ...(repoFlag ? { repoPinned: true } : {}), ...(extra.length ? { extraRepoPaths: extra } : {}), ...(hands ? { unattended: true } : {}) };
+}
+
+/**
+ * The repositories as they are now, not only as the install recorded them: a
+ * repository cloned since, or a session opened in a workspace other than the
+ * install's, is found by looking at the folder the session is in (the
+ * configured workspace when the session is inside it, else the nearest
+ * repository or the current folder). Read-only; the config file is not changed.
+ */
+export function withLiveRepos(config: HarnessConfig, cwd: string): HarnessConfig {
+  const known = new Set((config.repos ?? []).map((r) => path.resolve(r.path)));
+  const roots = new Set<string>();
+  const ws = config.workspaceRoot && path.isAbsolute(config.workspaceRoot) ? path.resolve(config.workspaceRoot) : null;
+  if (ws) roots.add(ws);
+  const here = path.resolve(cwd);
+  if (!ws || !(here === ws || here.startsWith(ws + path.sep))) roots.add(nearestRepoRoot(here) ?? here);
+  const found: RepoRef[] = [];
+  for (const root of roots) {
+    let paths: string[] = [];
+    try {
+      paths = findRepos(root);
+    } catch {
+      continue;
+    }
+    for (const p of paths) {
+      const abs = path.resolve(p);
+      if (known.has(abs)) continue;
+      known.add(abs);
+      found.push({ id: repoIdFor(abs), path: abs, name: path.basename(abs), isGit: fs.existsSync(path.join(abs, '.git')) });
+    }
+  }
+  return found.length ? { ...config, repos: [...(config.repos ?? []), ...found] } : config;
 }
 
 function repoName(b: BriefFile, id: string): string {

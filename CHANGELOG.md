@@ -3,6 +3,12 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.12.0 (2026-10-28)
+
+- Intake and `intake scout` see the repositories as they are now: the configured workspace folder and, when the session is elsewhere, the nearest repository or current folder are scanned for repositories (two levels, as the install does) and merged with the install's list, read-only. A repository cloned after the install is searched and placed like the others; the config file is not changed.
+- `harness config set intake.unattended true`: every intake behaves as with `--unattended` (a blocking question takes its recommended option, recorded as an assumption in the brief and the write-up; the criterion is not held open), for a hands-off flow where the choices are reviewed in the pull request text.
+- Task skill and team guide: the session normally starts in the workspace folder, not in a repository; every later command names the repository (`--repo`), as the brief and the Stop hook print them.
+
 ## 0.11.0 (2026-10-28)
 
 - Intake finds the repositories itself. For each criterion it takes the ticket's concrete details (route paths, table names, file paths, quoted and bare identifiers such as `LowStockPanel`, `stock_levels`) and searches every repository of the workspace for them, read-only and bounded (4 s, 8000 files per repository, generated folders skipped). A criterion goes to every repository holding a route, table or path of it (the endpoint and its caller both), else to one with two agreeing identifiers or one distinctive one; the brief shows `(code)` and a `found:` line with the files. The result is kept in the brief and reused when questions are answered. A name match on a plain word ("the dashboard" -> `web-dashboard`) is a new fallback; generic name parts (service, api, core...) never match. The user's `--repo` and a repository named in the text still win.
