@@ -824,7 +824,7 @@ function singular(s: string): string {
 
 export interface RepoMatch {
   repos: string[];
-  how: 'mention' | 'path' | 'resource' | 'ticket' | 'default' | 'only-repo' | 'none';
+  how: 'mention' | 'path' | 'resource' | 'ticket' | 'default' | 'only-repo' | 'given' | 'none';
 }
 
 /** Repos for one criterion; `ticketRepos` are the repos the ticket as a whole mentions. */

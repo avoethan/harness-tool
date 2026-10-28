@@ -164,6 +164,13 @@ harness config set jira.filter "parent = EPIC-1 AND status = 'Ready for dev' ORD
 harness config set jira.filter "'Epic Link' = EPIC-1 AND status = 'Ready for dev' ORDER BY rank"    # Jira Data Center
 ```
 
+The brief's `repo:` line says which repository each criterion goes to, and
+how the harness chose it. If it picked the wrong one, say which:
+`harness intake --jira SHOP-102 --repo C:\code\<project>\<repo>` (or tell
+the agent "it's in <repo>"). A repository you name wins over the guess and is
+kept when questions are answered; a criterion that names another repository
+by name still goes there.
+
 Optional, to take the next ticket from a saved search instead of naming it:
 
 ```powershell

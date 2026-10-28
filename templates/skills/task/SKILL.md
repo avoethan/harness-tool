@@ -75,6 +75,11 @@ exists for people typing in a terminal.
 When the user gives a ticket key (for example `SHOP-102`) instead of pasted
 text, run `harness intake --jira SHOP-102`; it reads the ticket itself.
 
+When the user says which repository the ticket is in, add
+`--repo <that repository's folder>` to the intake command; it wins over the
+harness's own guess. When the brief's `repo:` line names a repository the
+user did not expect, ask before going on, and run intake again with `--repo`.
+
 Expected output (shape):
 
 ```

@@ -129,7 +129,7 @@ function apiError(status: number, body: string): string {
   }
   const why =
     status === 401 || status === 403
-      ? `Jira refused the request (${status}); check the token and email variables and your permission on the project`
+      ? `Jira refused the request (${status}); check the token and email (harness jira token status; Data Center: personal access token, no email; Cloud: API token and your Atlassian email) and your permission on the project`
       : status === 404
         ? 'Jira says not found (404): no such issue or project, or no access to it'
         : status === 400

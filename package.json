@@ -1,6 +1,6 @@
 {
   "name": "agent-harness",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Reads a codebase and its agent setup, works out the real standards with evidence, and configures a harness so coding agents (Devin desktop, Claude Code, Codex) follow those standards, prove their work, and need a human rarely.",
   "license": "MIT",
   "private": false,

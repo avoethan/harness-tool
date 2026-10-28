@@ -3,6 +3,11 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.9.2 (2026-10-28)
+
+- Intake: `--repo` given explicitly now wins over the harness's guess of the repository (a path, a resource name that matches another repository, the ticket as a whole); only a criterion that names another repository by name still goes there. The choice is kept in the brief (`pinnedRepo`), so answering a question or taking the same ticket again keeps it. The brief shows `(given)`. Before, `--repo` counted only when the ticket pointed nowhere, so a ticket mentioning e.g. "inventory" went to an inventory repository whatever the user said. The task skill tells the agent to pass `--repo` when the user names the repository, and to ask when the brief names one the user did not expect.
+- Jira 401/403 messages say what to check (`harness jira token status`; Data Center: personal access token and no email; Cloud: API token and the Atlassian email) instead of "the token and email variables".
+
 ## 0.9.1 (2026-10-28)
 
 - The harness's own HTTPS calls (Jira read and write, `pr open`, `reviews fetch`) also trust the operating system's certificate store where Node can read it (Node 22.15+, 23.5+), next to Node's bundled list and `NODE_EXTRA_CA_CERTS`. A company network that re-signs HTTPS with its own root made `harness intake --jira` fail with "self-signed certificate in certificate chain"; that error now also says how to export the company root for `NODE_EXTRA_CA_CERTS` on an older Node. Certificate checks are never turned off.

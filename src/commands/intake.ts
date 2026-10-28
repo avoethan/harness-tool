@@ -77,7 +77,7 @@ function repoRootFrom(flag: string | undefined): string | undefined {
 function ctxFor(repoFlag: string | undefined, unattended = false) {
   const defaultRepoPath = repoRootFrom(repoFlag);
   const resolved = resolveConfig(defaultRepoPath ?? process.cwd());
-  return { config: resolved.config, defaultRepoPath, ...(unattended ? { unattended: true } : {}) };
+  return { config: resolved.config, defaultRepoPath, ...(repoFlag ? { repoPinned: true } : {}), ...(unattended ? { unattended: true } : {}) };
 }
 
 function repoName(b: BriefFile, id: string): string {

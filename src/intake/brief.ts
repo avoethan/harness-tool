@@ -105,12 +105,20 @@ export interface BriefFile extends Brief {
   updatedAt: string;
   /** The Jira issue key when the ticket was read with `--jira` / `--jira-next` (used by `harness jira comment`). */
   jiraKey?: string;
+  /** The repository the user named with `--repo`; it keeps winning over the guesses when the brief is rebuilt. */
+  pinnedRepo?: string;
 }
 
 export interface IntakeContext {
   config: Pick<HarnessConfig, 'repos'>;
   /** `--repo` or the git root of the working directory. */
   defaultRepoPath?: string;
+  /**
+   * `--repo` given explicitly: the user said which repository the ticket is
+   * in, so it wins over the guesses (a path, resource or the ticket as a
+   * whole); only a criterion that names another repository by name goes there.
+   */
+  repoPinned?: boolean;
   now?: Date;
   /**
    * No one is there to answer (`harness intake --unattended`, `HARNESS_UNATTENDED=1`, the personal runner):
@@ -206,6 +214,7 @@ interface Seed {
   dropped: Criterion[];
   baseShas: Record<string, string>;
   jiraKey?: string;
+  pinnedRepo?: string;
 }
 
 /** Parse a pasted ticket and build the brief. */
@@ -231,6 +240,7 @@ export function buildBrief(text: string, ctx: IntakeContext): BriefFile {
     dropped: previous && previous.ticketHash === parsed.hash ? previous.dropped : [],
     baseShas: previous && previous.ticketHash === parsed.hash ? previous.baseShas : {},
     ...((ctx.jiraKey ?? (previous && previous.ticketHash === parsed.hash ? previous.jiraKey : undefined)) ? { jiraKey: (ctx.jiraKey ?? previous?.jiraKey) as string } : {}),
+    ...(ctx.repoPinned && ctx.defaultRepoPath ? { pinnedRepo: ctx.defaultRepoPath } : previous && previous.ticketHash === parsed.hash && previous.pinnedRepo ? { pinnedRepo: previous.pinnedRepo } : {}),
   };
   return assemble(seed, ctx, now);
 }
@@ -257,6 +267,7 @@ function seedOf(b: BriefFile): Seed {
     dropped: b.dropped,
     baseShas: b.baseShas,
     ...(b.jiraKey ? { jiraKey: b.jiraKey } : {}),
+    ...(b.pinnedRepo ? { pinnedRepo: b.pinnedRepo } : {}),
   };
 }
 
@@ -264,8 +275,11 @@ const FACT_TOPICS = new Set(['meaning', 'measure']);
 
 /** Classification, ambiguity gate, size gate and lint over the stored criteria. */
 function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): BriefFile {
-  const infos = repoInfos(ctx.config, ctx.defaultRepoPath ? [ctx.defaultRepoPath] : []);
-  const defaultRepo = ctx.defaultRepoPath ? repoIdFor(ctx.defaultRepoPath) : undefined;
+  const pinnedPath = ctx.repoPinned && ctx.defaultRepoPath ? ctx.defaultRepoPath : seed.pinnedRepo;
+  const defaultPath = pinnedPath ?? ctx.defaultRepoPath;
+  const infos = repoInfos(ctx.config, defaultPath ? [defaultPath] : []);
+  const defaultRepo = defaultPath ? repoIdFor(defaultPath) : undefined;
+  const pinned = !!pinnedPath;
   const byId = new Map(infos.map((r) => [r.id, r]));
   const allText = [seed.title, seed.description, ...seed.criteria.map((c) => c.text)].join('\n');
   const ticketRepos = infos.filter((r) => mentionsRepo(allText, r) !== null).map((r) => r.id);
@@ -290,7 +304,8 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
     const kr = classifyKind(classifyText, facts, ticketText);
     if (inherited) kr.reasons = [...kr.reasons, `endpoint ${inherited.routes[0].method} ${inherited.routes[0].path.split('?')[0]} from the ticket`];
     let kind: CriterionKind = kr.kind;
-    const match = mapCriterionRepos(c.text, facts, infos, ticketRepos, defaultRepo);
+    const guessed = mapCriterionRepos(c.text, facts, infos, ticketRepos, defaultRepo);
+    const match: RepoMatch = pinned && defaultRepo && guessed.how !== 'mention' ? { repos: [defaultRepo], how: 'given' } : guessed;
     const repo: RepoInfo | undefined = match.repos.length ? byId.get(match.repos[0]) : undefined;
     const system = repo?.name ?? (ticketRepos.length === 1 ? byId.get(ticketRepos[0])?.name : undefined) ?? 'system';
     const ears = kr.needsRewrite ? earsRewrite(classifyText, system, facts, kind) : undefined;
@@ -438,6 +453,7 @@ function assemble(seed: Seed, ctx: IntakeContext, now: string, round = 0): Brief
     baseShas,
     lint,
     ...(seed.jiraKey ? { jiraKey: seed.jiraKey } : {}),
+    ...(seed.pinnedRepo ? { pinnedRepo: seed.pinnedRepo } : {}),
   };
 }
 

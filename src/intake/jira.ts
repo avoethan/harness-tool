@@ -114,7 +114,7 @@ export function redirectMessage(res: { status: number; headers: Record<string, s
 }
 
 export function statusHint(status: number): string {
-  return status === 401 || status === 403 ? ' (check the token and email variables)' : status === 404 ? ' (no such issue, or no access to it)' : '';
+  return status === 401 || status === 403 ? ' (check the token and email: `harness jira token status`; Jira Data Center takes a personal access token and no email, Jira Cloud an API token and your Atlassian email)' : status === 404 ? ' (no such issue, or no access to it)' : '';
 }
 
 export async function fetchJiraTicket(key: string, cfg: JiraConfig | undefined, env: NodeJS.ProcessEnv = process.env): Promise<JiraResult> {
