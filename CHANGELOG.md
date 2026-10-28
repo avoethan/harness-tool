@@ -3,6 +3,12 @@
 All notable changes to the harness. Versions follow semantic versioning; the
 version is in `package.json` and `harness version` prints it.
 
+## 0.13.0 (2026-10-28)
+
+- `harness jira update <KEY>`: change a ticket's title, description and acceptance criteria (`--title`, `--description` or `--description-file`, `--acceptance` repeated or `--acceptance-file`, `--from-brief [id]` for the brief's clarified criteria, title and description). The issue is read first, each field is shown before and after, nothing is sent without `--yes`, and only the fields that differ are sent (`PUT /rest/api/2/issue/<KEY>`). Criteria go to `jira.acceptanceField` when set, else into the description's "Acceptance Criteria" section, replaced in place or added at the end. Admin-only like the other Jira writes.
+- `harness jira create` takes the same field flags to write a new ticket from them (type Story unless `--type`; no task or write-up needed; `--key` links it). `--from` and the field flags do not combine.
+- Internals: a PUT sender next to the POST one, `readJiraFields` for an issue's raw fields.
+
 ## 0.12.0 (2026-10-28)
 
 - Intake and `intake scout` see the repositories as they are now: the configured workspace folder and, when the session is elsewhere, the nearest repository or current folder are scanned for repositories (two levels, as the install does) and merged with the install's list, read-only. A repository cloned after the install is searched and placed like the others; the config file is not changed.

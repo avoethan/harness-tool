@@ -86,11 +86,11 @@ export function httpGetOnce(url: string, headers: Record<string, string>, timeou
 
 export type HttpPost = (url: string, headers: Record<string, string>, body: string, timeoutMs: number) => Promise<HttpResponse>;
 
-/** One JSON POST (used only by the Jira writes, which the user runs; never by the test suite against the network). */
-export const defaultHttpPost: HttpPost = (url, headers, body, timeoutMs) =>
+/** One JSON POST or PUT (used only by the Jira writes, which the user runs; never by the test suite against the network). */
+const jsonSender = (method: 'POST' | 'PUT'): HttpPost => (url, headers, body, timeoutMs) =>
   new Promise((resolve, reject) => {
     const h = { ...headers, 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(body)) };
-    const req = https.request(url, { method: 'POST', headers: h, timeout: timeoutMs, ca: trustedCa() }, (res) => {
+    const req = https.request(url, { method, headers: h, timeout: timeoutMs, ca: trustedCa() }, (res) => {
       let text = '';
       res.setEncoding('utf8');
       res.on('data', (c: string) => {
@@ -108,7 +108,21 @@ export const defaultHttpPost: HttpPost = (url, headers, body, timeoutMs) =>
     req.end();
   });
 
+export const defaultHttpPost: HttpPost = jsonSender('POST');
+export const defaultHttpPut: HttpPost = jsonSender('PUT');
+
 let httpPost: HttpPost = defaultHttpPost;
+let httpPut: HttpPost = defaultHttpPut;
+/** Tests replace the HTTP PUT layer; returns the previous one. */
+export function setHttpPut(fn: HttpPost): HttpPost {
+  const prev = httpPut;
+  httpPut = fn;
+  return prev;
+}
+/** One PUT through the current HTTP layer. */
+export function httpPutOnce(url: string, headers: Record<string, string>, body: string, timeoutMs: number): Promise<HttpResponse> {
+  return httpPut(url, headers, body, timeoutMs);
+}
 /** Tests replace the HTTP POST layer; returns the previous one. */
 export function setHttpPost(fn: HttpPost): HttpPost {
   const prev = httpPost;

@@ -212,6 +212,36 @@ harness config set jira.filter "project = SHOP AND status = 'Ready for dev' ORDE
 harness intake --jira-next
 ```
 
+Writing and updating tickets (you run these; the agent cannot). To change a
+ticket's title, description or acceptance criteria:
+
+```powershell
+harness jira update SHOP-102 --title "Low-stock endpoint" --dry-run
+harness jira update SHOP-102 --acceptance "GET /products/low-stock returns the products below their threshold" --acceptance "The dashboard lists them" --yes
+harness jira update SHOP-102 --description-file .\desc.txt --acceptance-file .\ac.txt --yes
+harness jira update SHOP-102 --from-brief --dry-run
+```
+
+It reads the ticket first and prints each field before and after; nothing is
+sent without `--yes`, and only the fields that differ are sent. Criteria go to
+your acceptance field when `jira.acceptanceField` is set, else into an
+"Acceptance Criteria" section of the description (replaced in place, or added
+at the end). `--from-brief` writes back what intake made of the ticket: the
+title, the description and the criteria as the brief states them, the testable
+rewrite where one was made and the answers you gave, so the ticket says what
+was actually built; add `--title`/`--acceptance` to override parts of it.
+
+To write a new ticket from its fields:
+
+```powershell
+harness jira create --title "Cache the stock list" --description "It is slow." --acceptance "p95 under 200 ms" --project SHOP --dry-run
+```
+
+Add `--yes` to send it; `--type Bug` for another issue type (Story by
+default); `--key SHOP-102` links it to that ticket. Jira's own text rules
+apply: wiki markup on Data Center and the v2 API, `h2.` headings and `#`
+numbered lists as the harness writes them.
+
 Optional, to write back to Jira (you run these; the agent cannot): after the
 pull request is open, `harness jira comment --dry-run` shows the comment (the
 verification table, the gate verdict and the pull request link), and

@@ -110,3 +110,38 @@ export function blockedReason(reasons: string[]): string | null {
   }
   return null;
 }
+
+export const AC_HEADING = 'h2. Acceptance Criteria';
+
+/** The acceptance criteria as a wiki numbered list, one `# ...` line each. */
+export function acceptanceList(lines: string[]): string {
+  return lines.map((l) => clean(l).trim()).filter(Boolean).map((l) => `# ${l.replace(/^(#|\d+[.)]|[-*])\s+/, '')}`).join('\n');
+}
+
+/**
+ * The description with its Acceptance Criteria section replaced (or added at
+ * the end). The section runs from the heading to the next `h1.`/`h2.` heading.
+ */
+export function withAcceptanceSection(description: string, acceptance: string): string {
+  const lines = description.replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex((l) => /^h[1-6]\.\s*acceptance criteria\s*$/i.test(l.trim()));
+  const block = `${AC_HEADING}\n${acceptance.trim()}`;
+  if (start < 0) return `${description.replace(/\s+$/, '')}${description.trim() ? '\n\n' : ''}${block}\n`;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^h[1-6]\.\s/.test(lines[i].trim())) {
+      end = i;
+      break;
+    }
+  }
+  const before = lines.slice(0, start).join('\n').replace(/\s+$/, '');
+  const after = lines.slice(end).join('\n').replace(/^\s+/, '');
+  return `${before}${before ? '\n\n' : ''}${block}${after ? '\n\n' + after : '\n'}`;
+}
+
+/** A field change for people: the old and new text, side by side as lines. */
+export function fieldDiff(name: string, before: string, after: string): string {
+  if (before === after) return `${name}: unchanged`;
+  const show = (t: string) => (t.trim() ? t.replace(/\r\n/g, '\n').split('\n').map((l) => `    ${l}`).join('\n') : '    (empty)');
+  return `${name}:\n  before:\n${show(before)}\n  after:\n${show(after)}`;
+}

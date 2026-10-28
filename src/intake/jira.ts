@@ -117,7 +117,31 @@ export function statusHint(status: number): string {
   return status === 401 || status === 403 ? ' (check the token and email: `harness jira token status`; Jira Data Center takes a personal access token and no email, Jira Cloud an API token and your Atlassian email)' : status === 404 ? ' (no such issue, or no access to it)' : '';
 }
 
+export interface JiraFields {
+  summary: string;
+  description: string;
+  /** The acceptance field's text when `jira.acceptanceField` is set, else ''. */
+  acceptance: string;
+}
+
+/** The issue's summary, description and acceptance field as Jira holds them (read-only). */
+export async function readJiraFields(key: string, cfg: JiraConfig | undefined, env: NodeJS.ProcessEnv = process.env): Promise<{ ok: true; fields: JiraFields } | { ok: false; exit: 1 | 2; message: string }> {
+  const r = await fetchRaw(key, cfg, env);
+  if (!r.ok) return r;
+  return { ok: true, fields: { summary: fieldText(r.f.summary), description: fieldText(r.f.description), acceptance: cfg?.acceptanceField ? fieldText(r.f[cfg.acceptanceField]) : '' } };
+}
+
 export async function fetchJiraTicket(key: string, cfg: JiraConfig | undefined, env: NodeJS.ProcessEnv = process.env): Promise<JiraResult> {
+  const r = await fetchRaw(key, cfg, env);
+  if (!r.ok) return r;
+  const f = r.f;
+  const summary = fieldText(f.summary);
+  if (!summary.trim()) return fail(1, `Jira issue ${key} has no summary.`);
+  const acceptance = cfg?.acceptanceField ? fieldText(f[cfg.acceptanceField]) : '';
+  return { ok: true, key, text: composeTicket(summary, fieldText(f.description), acceptance) };
+}
+
+async function fetchRaw(key: string, cfg: JiraConfig | undefined, env: NodeJS.ProcessEnv): Promise<{ ok: true; f: Record<string, unknown> } | { ok: false; exit: 1 | 2; message: string }> {
   if (!JIRA_KEY_RE.test(key)) return fail(2, `"${key}" is not a Jira issue key (expected something like SHOP-102).`);
   const st = jiraSetup(cfg, env);
   if (!st.ok) return st;
@@ -143,10 +167,7 @@ export async function fetchJiraTicket(key: string, cfg: JiraConfig | undefined, 
   }
   const f = data?.fields;
   if (!f || typeof f !== 'object') return fail(1, `Jira answered ${key} without fields.`);
-  const summary = fieldText(f.summary);
-  if (!summary.trim()) return fail(1, `Jira issue ${key} has no summary.`);
-  const acceptance = cfg?.acceptanceField ? fieldText(f[cfg.acceptanceField]) : '';
-  return { ok: true, key, text: composeTicket(summary, fieldText(f.description), acceptance) };
+  return { ok: true, f };
 }
 
 /** `jira.filter`: a bare number is a saved filter id, anything else is JQL. */
